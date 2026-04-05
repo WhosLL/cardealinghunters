@@ -5,7 +5,7 @@ const APIFY_TOKEN = import.meta.env.VITE_APIFY_TOKEN;
 // Scraper configurations for each source
 export const SCRAPERS = {
   craigslist: {
-    actorId: 'viralanalyzer/craigslist-scraper',
+    actorId: 'viralanalyzer~craigslist-scraper',
     name: 'Craigslist',
     buildInput: (searchUrl: string) => {
       // Parse city from URL or use default
@@ -42,7 +42,7 @@ export const SCRAPERS = {
     }),
   },
   autotrader: {
-    actorId: 'epctex/autotrader-scraper',
+    actorId: 'epctex~autotrader-scraper',
     name: 'AutoTrader',
     buildInput: (searchUrl: string) => ({
       startUrls: [searchUrl],
@@ -67,7 +67,7 @@ export const SCRAPERS = {
     }),
   },
   carscom: {
-    actorId: 'voyn/cars-scraper',
+    actorId: 'voyn~cars-scraper',
     name: 'Cars.com',
     buildInput: (searchUrl: string) => ({
       list_url: [searchUrl],
