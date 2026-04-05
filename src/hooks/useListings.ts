@@ -162,3 +162,81 @@ export function useListings(filters: ListingsFilters) {
     refetch: fetchListings,
   };
 }
+
+
+export function useSavedListings() {
+  const { user } = useAuth();
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchSavedListings();
+  }, [user]);
+
+  const fetchSavedListings = async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { data: actions } = await supabase
+        .from('user_actions')
+        .select('listing_id')
+        .eq('user_id', user.id)
+        .eq('action', 'like');
+
+      if (!actions || actions.length === 0) {
+        setListings([]);
+        setLoading(false);
+        return;
+      }
+
+      const likedIds = actions.map((a: UserActionsRecord) => a.listing_id);
+
+      const { data: likedListings, error: queryError } = await supabase
+        .from('listings')
+        .select('*')
+        .in('id', likedIds);
+
+      if (queryError) throw queryError;
+
+      setListings(likedListings || []);
+    } catch (err: any) {
+      const message = err?.message || 'Failed to fetch saved listings';
+      setError(message);
+      console.error('Error fetching saved listings:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUnlike = async (listingId: string) => {
+    if (!user) return;
+
+    try {
+      await supabase
+        .from('user_actions')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('listing_id', listingId)
+        .eq('action', 'like');
+
+      setListings(prev => prev.filter(l => l.id !== listingId));
+    } catch (err: any) {
+      console.error('Error unliking listing:', err);
+    }
+  };
+
+  return {
+    listings,
+    loading,
+    error,
+    handleUnlike,
+    refetch: fetchSavedListings,
+  };
+}
