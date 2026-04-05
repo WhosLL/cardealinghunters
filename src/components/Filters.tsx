@@ -40,40 +40,49 @@ const DEAL_SCORES = [
 export function Filters({ onFiltersChange, onReset }: FiltersProps) {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
-  const [make, setMake] = useState('');
+  const [selectedMakes, setSelectedMakes] = useState<string[]>([]);
+  const [location, setLocation] = useState('');
   const [maxMileage, setMaxMileage] = useState('');
   const [dealScores, setDealScores] = useState<string[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [makesOpen, setMakesOpen] = useState(false);
 
   useEffect(() => {
     const filters: ListingsFilters = {};
-
     if (minPrice) filters.minPrice = parseInt(minPrice);
     if (maxPrice) filters.maxPrice = parseInt(maxPrice);
-    if (make) filters.make = make;
+    if (selectedMakes.length > 0) filters.makes = selectedMakes;
+    if (location) filters.location = location;
     if (maxMileage) filters.maxMileage = parseInt(maxMileage);
     if (dealScores.length > 0) filters.dealScores = dealScores;
 
     onFiltersChange(filters);
-  }, [minPrice, maxPrice, make, maxMileage, dealScores]);
+  }, [minPrice, maxPrice, selectedMakes, location, maxMileage, dealScores]);
+
+  const handleMakeToggle = (make: string) => {
+    setSelectedMakes(prev =>
+      prev.includes(make) ? prev.filter(m => m !== make) : [...prev, make]
+    );
+  };
 
   const handleDealScoreChange = (score: string) => {
-    setDealScores((prev) =>
-      prev.includes(score) ? prev.filter((s) => s !== score) : [...prev, score]
+    setDealScores(prev =>
+      prev.includes(score) ? prev.filter(s => s !== score) : [...prev, score]
     );
   };
 
   const handleReset = () => {
     setMinPrice('');
     setMaxPrice('');
-    setMake('');
+    setSelectedMakes([]);
+    setLocation('');
     setMaxMileage('');
     setDealScores([]);
     onReset();
   };
 
   const hasActiveFilters =
-    minPrice || maxPrice || make || maxMileage || dealScores.length > 0;
+    minPrice || maxPrice || selectedMakes.length > 0 || location || maxMileage || dealScores.length > 0;
 
   return (
     <div className="bg-gray-800 rounded-lg p-4 mb-6">
@@ -82,7 +91,7 @@ export function Filters({ onFiltersChange, onReset }: FiltersProps) {
         className="flex items-center justify-between w-full text-lg font-semibold text-white hover:text-blue-400 transition-colors"
       >
         <span>Filters {hasActiveFilters && '(Active)'}</span>
-        <span className="text-2xl">{isOpen ? '−' : '+'}</span>
+        <span className="text-2xl">{isOpen ? '-' : '+'}</span>
       </button>
 
       {isOpen && (
@@ -97,7 +106,7 @@ export function Filters({ onFiltersChange, onReset }: FiltersProps) {
                 type="number"
                 value={minPrice}
                 onChange={(e) => setMinPrice(e.target.value)}
-                placeholder="0"
+                placeholder="$0"
                 className="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
               />
             </div>
@@ -115,23 +124,48 @@ export function Filters({ onFiltersChange, onReset }: FiltersProps) {
             </div>
           </div>
 
-          {/* Make */}
+          {/* Location */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
-              Make
+              Location
             </label>
-            <select
-              value={make}
-              onChange={(e) => setMake(e.target.value)}
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="e.g. Los Angeles, CA"
               className="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+
+          {/* Makes - Multi-select */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Makes {selectedMakes.length > 0 && `(${selectedMakes.length} selected)`}
+            </label>
+            <button
+              onClick={() => setMakesOpen(!makesOpen)}
+              className="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-left"
             >
-              <option value="">All Makes</option>
-              {CAR_MAKES.map((carMake) => (
-                <option key={carMake} value={carMake}>
-                  {carMake}
-                </option>
-              ))}
-            </select>
+              {selectedMakes.length === 0
+                ? 'All Makes'
+                : selectedMakes.join(', ')}
+            </button>
+            {makesOpen && (
+              <div className="mt-1 max-h-48 overflow-y-auto bg-gray-700 rounded border border-gray-600 p-2 grid grid-cols-2 gap-1">
+                {CAR_MAKES.map((carMake) => (
+                  <label key={carMake} className="flex items-center gap-2 cursor-pointer px-2 py-1 hover:bg-gray-600 rounded">
+                    <input
+                      type="checkbox"
+                      checked={selectedMakes.includes(carMake)}
+                      onChange={() => handleMakeToggle(carMake)}
+                      className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-300">{carMake}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Max Mileage */}
