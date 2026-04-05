@@ -119,11 +119,10 @@ export async function triggerApifyScrape(searchUrl: string, source: ScraperSourc
   const scraper = SCRAPERS[source];
   const input = scraper.buildInput(searchUrl);
 
-  const response = await fetch(`https://api.apify.com/v2/acts/${scraper.actorId}/runs`, {
+  const response = await fetch(`https://api.apify.com/v2/acts/${scraper.actorId}/runs?token=${APIFY_TOKEN}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${APIFY_TOKEN}`,
     },
     body: JSON.stringify(input),
   });
@@ -148,17 +147,13 @@ export async function triggerApifyScrape(searchUrl: string, source: ScraperSourc
 }
 
 export async function getApifyRunStatus(runId: string): Promise<any> {
-  const response = await fetch(`https://api.apify.com/v2/runs/${runId}`, {
-    headers: { 'Authorization': `Bearer ${APIFY_TOKEN}` },
-  });
+  const response = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_TOKEN}`);
   if (!response.ok) throw new Error(`Failed to get run status: ${response.statusText}`);
   return response.json();
 }
 
 export async function getApifyDataset(datasetId: string): Promise<any[]> {
-  const response = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items`, {
-    headers: { 'Authorization': `Bearer ${APIFY_TOKEN}` },
-  });
+  const response = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_TOKEN}`);
   if (!response.ok) throw new Error(`Failed to get dataset: ${response.statusText}`);
   return response.json();
 }
