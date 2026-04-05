@@ -40,7 +40,176 @@ const PRIVATE_SIGNALS = [
   'one owner', '1 owner', 'single owner', 'clean title',
   'salvage title', 'rebuilt title', 'no dealer'
 ];
-: number, make: string): boolean {
+
+// Known car makes (lowercase -> proper name)
+const KNOWN_MAKES: Record<string, string> = {
+  'toyota': 'Toyota', 'honda': 'Honda', 'ford': 'Ford',
+  'chevrolet': 'Chevrolet', 'chevy': 'Chevrolet', 'bmw': 'BMW',
+  'mercedes': 'Mercedes-Benz', 'mercedes-benz': 'Mercedes-Benz',
+  'benz': 'Mercedes-Benz', 'audi': 'Audi', 'lexus': 'Lexus',
+  'nissan': 'Nissan', 'hyundai': 'Hyundai', 'kia': 'Kia',
+  'subaru': 'Subaru', 'mazda': 'Mazda', 'volkswagen': 'Volkswagen',
+  'vw': 'Volkswagen', 'jeep': 'Jeep', 'ram': 'RAM', 'dodge': 'Dodge',
+  'gmc': 'GMC', 'chrysler': 'Chrysler', 'buick': 'Buick',
+  'cadillac': 'Cadillac', 'lincoln': 'Lincoln', 'acura': 'Acura',
+  'infiniti': 'Infiniti', 'volvo': 'Volvo', 'porsche': 'Porsche',
+  'tesla': 'Tesla', 'land rover': 'Land Rover', 'landrover': 'Land Rover',
+  'mini': 'Mini', 'fiat': 'Fiat', 'mitsubishi': 'Mitsubishi',
+  'pontiac': 'Pontiac', 'saturn': 'Saturn', 'scion': 'Scion',
+  'genesis': 'Genesis', 'jaguar': 'Jaguar', 'alfa romeo': 'Alfa Romeo',
+  'maserati': 'Maserati', 'bentley': 'Bentley',
+  'ferrari': 'Ferrari', 'lamborghini': 'Lamborghini',
+  'mclaren': 'McLaren'
+};
+
+// Common models per make for better extraction
+const COMMON_MODELS: Record<string, string[]> = {
+  'Toyota': ['Camry', 'Corolla', 'RAV4', 'Tacoma', 'Tundra', 'Highlander', 'Prius', '4Runner', 'Sienna', 'Avalon', 'Yaris', 'Supra', 'Land Cruiser', 'GR86'],
+  'Honda': ['Civic', 'Accord', 'CR-V', 'Pilot', 'Odyssey', 'Fit', 'HR-V', 'Ridgeline', 'Element', 'S2000', 'Prelude', 'Insight', 'Passport'],
+  'Ford': ['F-150', 'F150', 'Mustang', 'Explorer', 'Escape', 'Focus', 'Fusion', 'Ranger', 'Bronco', 'Edge', 'Expedition', 'Taurus', 'F-250', 'F250', 'F-350', 'Maverick'],
+  'Chevrolet': ['Silverado', 'Camaro', 'Corvette', 'Malibu', 'Equinox', 'Tahoe', 'Suburban', 'Traverse', 'Impala', 'Cruze', 'Colorado', 'Blazer', 'Trax', 'Spark'],
+  'BMW': ['3 Series', '5 Series', '7 Series', 'X3', 'X5', 'X1', 'X7', 'M3', 'M5', '328i', '335i', '528i', '535i', 'Z4', 'M4'],
+  'Nissan': ['Altima', 'Sentra', 'Maxima', 'Rogue', 'Pathfinder', 'Frontier', 'Titan', 'Murano', 'Versa', '370Z', '350Z', 'Leaf', 'Kicks', 'Armada'],
+  'Jeep': ['Wrangler', 'Cherokee', 'Grand Cherokee', 'Compass', 'Renegade', 'Gladiator', 'Liberty', 'Patriot'],
+  'Dodge': ['Charger', 'Challenger', 'Durango', 'Journey', 'Grand Caravan', 'Dart', 'Viper', 'Neon'],
+  'Hyundai': ['Elantra', 'Sonata', 'Tucson', 'Santa Fe', 'Kona', 'Palisade', 'Venue', 'Accent', 'Veloster'],
+  'Kia': ['Forte', 'Optima', 'Sorento', 'Sportage', 'Soul', 'Telluride', 'Seltos', 'Rio', 'Stinger', 'K5'],
+  'Subaru': ['Outback', 'Forester', 'Crosstrek', 'Impreza', 'WRX', 'Legacy', 'Ascent', 'BRZ'],
+  'Tesla': ['Model 3', 'Model S', 'Model X', 'Model Y', 'Cybertruck'],
+  'Mercedes-Benz': ['C-Class', 'E-Class', 'S-Class', 'GLC', 'GLE', 'A-Class', 'CLA', 'C300', 'E350', 'S550', 'AMG', 'G-Wagon', 'GLA'],
+  'Volkswagen': ['Jetta', 'Passat', 'Golf', 'Tiguan', 'Atlas', 'Beetle', 'GTI', 'ID.4'],
+  'Lexus': ['RX', 'ES', 'IS', 'NX', 'GX', 'LS', 'LC', 'UX', 'RX350', 'ES350', 'IS350'],
+  'Mazda': ['Mazda3', 'Mazda6', 'CX-5', 'CX-9', 'CX-30', 'MX-5', 'Miata', 'CX-3', 'CX-50'],
+  'GMC': ['Sierra', 'Terrain', 'Acadia', 'Yukon', 'Canyon', 'Envoy'],
+  'RAM': ['1500', '2500', '3500', 'ProMaster'],
+  'Cadillac': ['Escalade', 'CT5', 'CT4', 'XT5', 'XT4', 'XT6', 'CTS', 'ATS', 'SRX'],
+  'Volvo': ['XC90', 'XC60', 'XC40', 'S60', 'S90', 'V60', 'V90'],
+  'Acura': ['TLX', 'MDX', 'RDX', 'ILX', 'TSX', 'TL', 'RSX', 'Integra'],
+  'Porsche': ['911', 'Cayenne', 'Macan', 'Panamera', 'Boxster', 'Cayman', 'Taycan'],
+};
+
+// --- Extraction helpers ---
+
+function extractYear(title: string): number {
+  const match = title.match(/\b(19[89]\d|20[0-2]\d)\b/);
+  return match ? parseInt(match[0]) : 0;
+}
+
+function extractMake(title: string): string {
+  const titleLower = title.toLowerCase();
+  // Check multi-word makes first
+  const multiWordMakes = ['land rover', 'alfa romeo', 'mercedes-benz'];
+  for (const make of multiWordMakes) {
+    if (titleLower.includes(make)) return KNOWN_MAKES[make];
+  }
+  // Tokenize and check single-word makes
+  const words = titleLower.split(/[\s,\-\/\|]+/);
+  for (const word of words) {
+    if (KNOWN_MAKES[word]) return KNOWN_MAKES[word];
+  }
+  // Try partial matches for common abbreviations
+  if (titleLower.includes('mercedes')) return 'Mercedes-Benz';
+  if (titleLower.includes('land rover')) return 'Land Rover';
+  return 'Unknown';
+}
+
+function extractModel(title: string, make: string): string {
+  if (make === 'Unknown') {
+    const match = title.match(/\b(?:19|20)\d{2}\b\s+\S+\s+(\S+)/);
+    return match ? match[1] : 'Unknown';
+  }
+  const models = COMMON_MODELS[make];
+  if (models) {
+    const titleLower = title.toLowerCase();
+    // Sort by length desc so "Grand Cherokee" matches before "Cherokee"
+    const sorted = [...models].sort((a, b) => b.length - a.length);
+    for (const model of sorted) {
+      if (titleLower.includes(model.toLowerCase())) return model;
+    }
+  }
+  // Fallback: word right after make name in title
+  const makeVariants = Object.entries(KNOWN_MAKES)
+    .filter(([_, v]) => v === make)
+    .map(([k]) => k);
+  for (const variant of makeVariants) {
+    const regex = new RegExp(variant.replace(/[-]/g, '[-\\s]?') + '\\s+(\\S+)', 'i');
+    const match = title.match(regex);
+    if (match && match[1]) {
+      const candidate = match[1].replace(/[^a-zA-Z0-9\-]/g, '');
+      if (candidate.length > 1 && !/^\d{4}$/.test(candidate)) return candidate;
+    }
+  }
+  return 'Unknown';
+}
+
+function extractMileage(text: string): number {
+  const patterns = [
+    /(\d{1,3})[,.](\d{3})\s*(?:miles|mi\b)/i,
+    /(\d{2,3})k\s*(?:miles|mi\b)/i,
+    /(?:mileage|odometer|odo)[:\s]*(\d{1,3})[,.](\d{3})/i,
+    /(?:mileage|odometer|odo)[:\s]*(\d{2,3})k/i,
+    /(\d{1,3})[,.](\d{3})\s*(?:original|actual|highway|hwy)\s*(?:miles|mi)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      if (pattern.source.includes('k\\s')) {
+        const val = parseInt(match[1]) * 1000;
+        if (val >= 1000 && val < 500000) return val;
+      } else if (match[2]) {
+        const val = parseInt(match[1] + match[2]);
+        if (val >= 1000 && val < 500000) return val;
+      }
+    }
+  }
+  return 0;
+}
+
+// --- Seller language analysis ---
+
+interface SellerAnalysis {
+  type: string;
+  tags: string[];
+}
+
+function analyzeSellerLanguage(text: string): SellerAnalysis {
+  const lc = text.toLowerCase();
+  const tags: string[] = [];
+  let dealerScore = 0;
+  let privateScore = 0;
+
+  for (const sig of DEALER_SIGNALS) {
+    if (lc.includes(sig)) { dealerScore++; tags.push(sig); }
+  }
+  for (const sig of PRIVATE_SIGNALS) {
+    if (lc.includes(sig)) { privateScore++; tags.push(sig); }
+  }
+  const urgencyTags: string[] = [];
+  for (const sig of URGENCY_SIGNALS) {
+    if (lc.includes(sig)) { urgencyTags.push(sig); }
+  }
+
+  let type = 'unknown';
+  if (dealerScore > privateScore) type = 'dealer';
+  else if (privateScore > 0) type = 'private';
+
+  return { type, tags: [...tags, ...urgencyTags.map(u => `urgent:${u}`)] };
+}
+
+function buildEnrichedDescription(original: string, seller: SellerAnalysis): string {
+  const badges: string[] = [];
+  if (seller.type === 'dealer') badges.push('[DEALER]');
+  else if (seller.type === 'private') badges.push('[PRIVATE]');
+  const hasUrgency = seller.tags.some(t => t.startsWith('urgent:'));
+  if (hasUrgency) badges.push('[MOTIVATED SELLER]');
+  const prefix = badges.length > 0 ? badges.join(' ') + ' ' : '';
+  const desc = original ? original.slice(0, 250) : '';
+  return (prefix + desc).trim();
+}
+
+// --- Junk filtering ---
+
+function isJunkListing(title: string, price: number, year: number, make: string): boolean {
   if (price < MIN_PRICE) return true;
   if (year === 0) return true;
   if (make === 'Unknown' && price < 3000) return true;
