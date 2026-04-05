@@ -1,4 +1,3 @@
-import { calculateDealScore } from './dealScore';
 import { supabase } from './supabase';
 
 const APIFY_TOKEN = import.meta.env.VITE_APIFY_TOKEN;
@@ -8,16 +7,19 @@ export const SCRAPERS = {
   craigslist: {
     actorId: 'jjzQxiI86NTYliq3t',
     name: 'Craigslist',
-    buildInput: (searchUrl: string) => ({ searchUrls: [searchUrl] }),
+    buildInput: (searchUrl: string) => ({
+      url: searchUrl,
+      max_results: 50,
+    }),
     defaultUrl: 'https://losangeles.craigslist.org/search/cta',
     normalizeItem: (item: any) => ({
       title: item.title || `${item.year || ''} ${item.make || ''} ${item.model || ''}`.trim() || 'Unknown Vehicle',
       year: parseInt(item.year) || new Date().getFullYear(),
-      make: item.make || 'Unknown',
-      model: item.model || 'Unknown',
+      make: item.make || extractMake(item.title || ''),
+      model: item.model || extractModel(item.title || ''),
       price: parseFloat(String(item.price).replace(/[^0-9.]/g, '')) || 0,
       mileage: parseFloat(String(item.odometer || item.mileage || '0').replace(/[^0-9]/g, '')) || 0,
-      location: item.location || item.mapAddress || 'Unknown',
+      location: item.location || item.mapAddress || item.hood || 'Unknown',
       image_url: item.images?.[0] || item.image || '',
       source_url: item.url || item.link || '',
       source: 'craigslist',
@@ -53,7 +55,9 @@ export const SCRAPERS = {
   carscom: {
     actorId: 'voyn/cars-scraper',
     name: 'Cars.com',
-    buildInput: (searchUrl: string) => ({ list_url: [searchUrl] }),
+    buildInput: (searchUrl: string) => ({
+      list_url: [searchUrl],
+    }),
     defaultUrl: 'https://www.cars.com/shopping/results/?stock_type=used&makes[]=&maximum_distance=50&zip=90001&sort=listed_at_desc',
     normalizeItem: (item: any) => ({
       title: item.name || `${item.year || ''} ${item.make || ''} ${item.model || ''}`.trim() || 'Unknown Vehicle',
@@ -73,6 +77,24 @@ export const SCRAPERS = {
 } as const;
 
 export type ScraperSource = keyof typeof SCRAPERS;
+
+function extractMake(title: string): string {
+  const knownMakes = ['Toyota', 'Honda', 'Ford', 'Chevrolet', 'Chevy', 'BMW', 'Mercedes', 'Audi', 'Lexus', 'Nissan', 'Hyundai', 'Kia', 'Subaru', 'Mazda', 'Volkswagen', 'VW', 'Jeep', 'RAM', 'Dodge', 'GMC', 'Chrysler', 'Buick', 'Cadillac', 'Lincoln', 'Acura', 'Infiniti', 'Volvo', 'Porsche', 'Tesla', 'Land Rover', 'Mini', 'Fiat', 'Mitsubishi', 'Pontiac', 'Saturn', 'Mercury', 'Scion'];
+  const titleLower = title.toLowerCase();
+  for (const make of knownMakes) {
+    if (titleLower.includes(make.toLowerCase())) return make;
+  }
+  return 'Unknown';
+}
+
+function extractModel(title: string): string {
+  const words = title.split(/\s+/);
+  if (words.length >= 3) {
+    const startIdx = /^\d{4}$/.test(words[0]) ? 2 : 1;
+    if (words[startIdx]) return words[startIdx];
+  }
+  return 'Unknown';
+}
 
 export async function triggerApifyScrape(searchUrl: string, source: ScraperSource = 'craigslist'): Promise<string> {
   const scraper = SCRAPERS[source];
@@ -94,7 +116,6 @@ export async function triggerApifyScrape(searchUrl: string, source: ScraperSourc
 
   const data = await response.json();
 
-  // Record the scrape run
   await supabase.from('scrape_runs').insert({
     apify_run_id: data.data.id,
     source: source,
@@ -131,20 +152,19 @@ export async function processAndInsertListings(
 ): Promise<number> {
   const scraper = SCRAPERS[source];
   const items = await getApifyDataset(datasetId);
+
   let insertedCount = 0;
 
   for (const item of items) {
     try {
       const normalized = scraper.normalizeItem(item);
 
-      // Skip items with no price or title
       if (!normalized.price || normalized.price <= 0) continue;
       if (normalized.title === 'Unknown Vehicle') continue;
 
       const marketValue = calculateMarketValue(normalized.year, normalized.make, normalized.model);
       const dealScore = calculateDealScore(normalized.price, marketValue);
 
-      // Check for duplicate by source_url
       if (normalized.source_url) {
         const { data: existing } = await supabase
           .from('listings')
@@ -167,7 +187,6 @@ export async function processAndInsertListings(
     }
   }
 
-  // Update scrape_runs table
   await supabase
     .from('scrape_runs')
     .update({
@@ -180,18 +199,30 @@ export async function processAndInsertListings(
   return insertedCount;
 }
 
+function calculateDealScore(price: number, marketValue: number): string {
+  if (marketValue <= 0) return 'fair';
+  const ratio = price / marketValue;
+  if (ratio < 0.85) return 'great';
+  if (ratio < 0.95) return 'good';
+  if (ratio <= 1.05) return 'fair';
+  return 'overpriced';
+}
+
 function calculateMarketValue(year: number, make: string, model: string): number {
   const currentYear = new Date().getFullYear();
   const age = currentYear - year;
 
   const premiumMakes: Record<string, number> = {
-    'BMW': 30000, 'Mercedes': 32000, 'Mercedes-Benz': 32000, 'Audi': 28000,
-    'Lexus': 26000, 'Porsche': 45000, 'Tesla': 35000, 'Land Rover': 35000,
-    'Toyota': 20000, 'Honda': 18000, 'Ford': 22000, 'Chevrolet': 20000,
-    'Jeep': 24000, 'RAM': 28000, 'GMC': 26000, 'Subaru': 20000,
-    'Mazda': 18000, 'Hyundai': 17000, 'Kia': 17000, 'Nissan': 17000,
-    'Volkswagen': 19000, 'Volvo': 24000, 'Acura': 22000, 'Infiniti': 22000,
-    'Cadillac': 28000, 'Lincoln': 26000, 'Dodge': 22000, 'Chrysler': 18000,
+    'BMW': 30000, 'Mercedes': 32000, 'Mercedes-Benz': 32000,
+    'Audi': 28000, 'Lexus': 26000, 'Porsche': 45000,
+    'Tesla': 35000, 'Land Rover': 35000, 'Toyota': 20000,
+    'Honda': 18000, 'Ford': 22000, 'Chevrolet': 20000,
+    'Jeep': 24000, 'RAM': 28000, 'GMC': 26000,
+    'Subaru': 20000, 'Mazda': 18000, 'Hyundai': 17000,
+    'Kia': 17000, 'Nissan': 17000, 'Volkswagen': 19000,
+    'Volvo': 24000, 'Acura': 22000, 'Infiniti': 22000,
+    'Cadillac': 28000, 'Lincoln': 26000, 'Dodge': 22000,
+    'Chrysler': 18000,
   };
 
   let baseValue = premiumMakes[make] || 18000;
