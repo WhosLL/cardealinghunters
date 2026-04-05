@@ -5,26 +5,40 @@ const APIFY_TOKEN = import.meta.env.VITE_APIFY_TOKEN;
 // Scraper configurations for each source
 export const SCRAPERS = {
   craigslist: {
-    actorId: 'jjzQxiI86NTYliq3t',
+    actorId: 'viralanalyzer/craigslist-scraper',
     name: 'Craigslist',
-    buildInput: (searchUrl: string) => ({
-      url: searchUrl,
-      max_results: 50,
-    }),
+    buildInput: (searchUrl: string) => {
+      // Parse city from URL or use default
+      let city = 'losangeles';
+      const cityMatch = searchUrl.match(/https?:\/\/([a-z]+)\.craigslist/);
+      if (cityMatch) city = cityMatch[1];
+      // Parse search query from URL or use default
+      let query = searchUrl;
+      if (searchUrl.includes('craigslist.org')) {
+        query = 'car truck';
+      }
+      return {
+        searchQueries: [query],
+        city: city,
+        category: 'sss',
+        sort: 'date',
+        maxResults: 30,
+      };
+    },
     defaultUrl: 'https://losangeles.craigslist.org/search/cta',
     normalizeItem: (item: any) => ({
-      title: item.title || `${item.year || ''} ${item.make || ''} ${item.model || ''}`.trim() || 'Unknown Vehicle',
-      year: parseInt(item.year) || new Date().getFullYear(),
-      make: item.make || extractMake(item.title || ''),
-      model: item.model || extractModel(item.title || ''),
-      price: parseFloat(String(item.price).replace(/[^0-9.]/g, '')) || 0,
-      mileage: parseFloat(String(item.odometer || item.mileage || '0').replace(/[^0-9]/g, '')) || 0,
-      location: item.location || item.mapAddress || item.hood || 'Unknown',
-      image_url: item.images?.[0] || item.image || '',
+      title: item.title || 'Unknown Vehicle',
+      year: extractYear(item.title || ''),
+      make: extractMake(item.title || ''),
+      model: extractModel(item.title || ''),
+      price: parseFloat(String(item.price || item.numericPrice || '0').replace(/[^0-9.]/g, '')) || 0,
+      mileage: 0,
+      location: item.location || item.area || 'Unknown',
+      image_url: item.imageUrl || item.image || '',
       source_url: item.url || item.link || '',
-      source: 'craigslist',
-      description: item.description || item.body || '',
-      posted_at: item.postedAt || item.datetime || new Date().toISOString(),
+      source: 'craigslist' as const,
+      description: item.title || '',
+      posted_at: item.date || item.postedAt || new Date().toISOString(),
     }),
   },
   autotrader: {
@@ -47,7 +61,7 @@ export const SCRAPERS = {
       location: item.ownerTitle || 'Unknown',
       image_url: item.images?.[0] || '',
       source_url: item.url || '',
-      source: 'autotrader',
+      source: 'autotrader' as const,
       description: item.features ? Object.values(item.features).flat().slice(0, 5).join(', ') : '',
       posted_at: new Date().toISOString(),
     }),
@@ -69,7 +83,7 @@ export const SCRAPERS = {
       location: 'Cars.com Listing',
       image_url: (item.images || []).find((img: string) => img) || '',
       source_url: item.record_url || item.url || '',
-      source: 'carscom',
+      source: 'carscom' as const,
       description: (item.features || []).slice(0, 5).join(', '),
       posted_at: new Date().toISOString(),
     }),
@@ -78,8 +92,13 @@ export const SCRAPERS = {
 
 export type ScraperSource = keyof typeof SCRAPERS;
 
+function extractYear(title: string): number {
+  const match = title.match(/\b(19|20)\d{2}\b/);
+  return match ? parseInt(match[0]) : new Date().getFullYear();
+}
+
 function extractMake(title: string): string {
-  const knownMakes = ['Toyota', 'Honda', 'Ford', 'Chevrolet', 'Chevy', 'BMW', 'Mercedes', 'Audi', 'Lexus', 'Nissan', 'Hyundai', 'Kia', 'Subaru', 'Mazda', 'Volkswagen', 'VW', 'Jeep', 'RAM', 'Dodge', 'GMC', 'Chrysler', 'Buick', 'Cadillac', 'Lincoln', 'Acura', 'Infiniti', 'Volvo', 'Porsche', 'Tesla', 'Land Rover', 'Mini', 'Fiat', 'Mitsubishi', 'Pontiac', 'Saturn', 'Mercury', 'Scion'];
+  const knownMakes = ['Toyota', 'Honda', 'Ford', 'Chevrolet', 'Chevy', 'BMW', 'Mercedes', 'Audi', 'Lexus', 'Nissan', 'Hyundai', 'Kia', 'Subaru', 'Mazda', 'Volkswagen', 'VW', 'Jeep', 'RAM', 'Dodge', 'GMC', 'Chrysler', 'Buick', 'Cadillac', 'Lincoln', 'Acura', 'Infiniti', 'Volvo', 'Porsche', 'Tesla', 'Land Rover', 'Mini', 'Fiat', 'Mitsubishi'];
   const titleLower = title.toLowerCase();
   for (const make of knownMakes) {
     if (titleLower.includes(make.toLowerCase())) return make;
