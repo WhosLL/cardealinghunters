@@ -1,58 +1,125 @@
 import { calculateDealScore } from './dealScore';
 import { supabase } from './supabase';
-import { Listing } from '../types/index';
 
 const APIFY_TOKEN = import.meta.env.VITE_APIFY_TOKEN;
-const APIFY_ACTOR_ID = 'jjzQxiI86NTYliq3t';
 
-export async function triggerApifyScrape(searchUrl: string): Promise<string> {
-  const response = await fetch(`https://api.apify.com/v2/acts/${APIFY_ACTOR_ID}/runs`, {
+// Scraper configurations for each source
+export const SCRAPERS = {
+  craigslist: {
+    actorId: 'jjzQxiI86NTYliq3t',
+    name: 'Craigslist',
+    buildInput: (searchUrl: string) => ({ searchUrls: [searchUrl] }),
+    defaultUrl: 'https://losangeles.craigslist.org/search/cta',
+    normalizeItem: (item: any) => ({
+      title: item.title || `${item.year || ''} ${item.make || ''} ${item.model || ''}`.trim() || 'Unknown Vehicle',
+      year: parseInt(item.year) || new Date().getFullYear(),
+      make: item.make || 'Unknown',
+      model: item.model || 'Unknown',
+      price: parseFloat(String(item.price).replace(/[^0-9.]/g, '')) || 0,
+      mileage: parseFloat(String(item.odometer || item.mileage || '0').replace(/[^0-9]/g, '')) || 0,
+      location: item.location || item.mapAddress || 'Unknown',
+      image_url: item.images?.[0] || item.image || '',
+      source_url: item.url || item.link || '',
+      source: 'craigslist',
+      description: item.description || item.body || '',
+      posted_at: item.postedAt || item.datetime || new Date().toISOString(),
+    }),
+  },
+  autotrader: {
+    actorId: 'epctex/autotrader-scraper',
+    name: 'AutoTrader',
+    buildInput: (searchUrl: string) => ({
+      startUrls: [searchUrl],
+      endPage: 3,
+      maxItems: 50,
+      proxy: { useApifyProxy: true, countryCode: 'US' },
+    }),
+    defaultUrl: 'https://www.autotrader.com/cars-for-sale/all-cars/los-angeles-ca-90001?searchRadius=50',
+    normalizeItem: (item: any) => ({
+      title: item.title || `${item.year || ''} ${item.brand || item.make || ''} ${item.model || ''}`.trim() || 'Unknown Vehicle',
+      year: parseInt(item.year) || new Date().getFullYear(),
+      make: item.brand || item.make || 'Unknown',
+      model: item.model || 'Unknown',
+      price: parseFloat(String(item.price).replace(/[^0-9.]/g, '')) || 0,
+      mileage: parseFloat(String(item.mileage || '0').replace(/[^0-9]/g, '')) || 0,
+      location: item.ownerTitle || 'Unknown',
+      image_url: item.images?.[0] || '',
+      source_url: item.url || '',
+      source: 'autotrader',
+      description: item.features ? Object.values(item.features).flat().slice(0, 5).join(', ') : '',
+      posted_at: new Date().toISOString(),
+    }),
+  },
+  carscom: {
+    actorId: 'voyn/cars-scraper',
+    name: 'Cars.com',
+    buildInput: (searchUrl: string) => ({ list_url: [searchUrl] }),
+    defaultUrl: 'https://www.cars.com/shopping/results/?stock_type=used&makes[]=&maximum_distance=50&zip=90001&sort=listed_at_desc',
+    normalizeItem: (item: any) => ({
+      title: item.name || `${item.year || ''} ${item.make || ''} ${item.model || ''}`.trim() || 'Unknown Vehicle',
+      year: parseInt(item.year) || new Date().getFullYear(),
+      make: item.make || 'Unknown',
+      model: item.model || 'Unknown',
+      price: parseFloat(String(item.price).replace(/[^0-9.]/g, '')) || 0,
+      mileage: parseFloat(String(item.mileage || '0').replace(/[^0-9]/g, '')) || 0,
+      location: 'Cars.com Listing',
+      image_url: (item.images || []).find((img: string) => img) || '',
+      source_url: item.record_url || item.url || '',
+      source: 'carscom',
+      description: (item.features || []).slice(0, 5).join(', '),
+      posted_at: new Date().toISOString(),
+    }),
+  },
+} as const;
+
+export type ScraperSource = keyof typeof SCRAPERS;
+
+export async function triggerApifyScrape(searchUrl: string, source: ScraperSource = 'craigslist'): Promise<string> {
+  const scraper = SCRAPERS[source];
+  const input = scraper.buildInput(searchUrl);
+
+  const response = await fetch(`https://api.apify.com/v2/acts/${scraper.actorId}/runs`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${APIFY_TOKEN}`,
     },
-    body: JSON.stringify({
-      searchUrls: [searchUrl],
-    }),
+    body: JSON.stringify(input),
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to trigger Apify scrape: ${response.statusText}`);
+    const errText = await response.text();
+    throw new Error(`Failed to trigger ${scraper.name} scrape: ${response.status} ${errText}`);
   }
 
   const data = await response.json();
+
+  // Record the scrape run
+  await supabase.from('scrape_runs').insert({
+    apify_run_id: data.data.id,
+    source: source,
+    search_url: searchUrl,
+    status: 'running',
+    listings_added: 0,
+    started_at: new Date().toISOString(),
+  });
+
   return data.data.id;
 }
 
 export async function getApifyRunStatus(runId: string): Promise<any> {
   const response = await fetch(`https://api.apify.com/v2/runs/${runId}`, {
-    headers: {
-      'Authorization': `Bearer ${APIFY_TOKEN}`,
-    },
+    headers: { 'Authorization': `Bearer ${APIFY_TOKEN}` },
   });
-
-  if (!response.ok) {
-    throw new Error(`Failed to get Apify run status: ${response.statusText}`);
-  }
-
+  if (!response.ok) throw new Error(`Failed to get run status: ${response.statusText}`);
   return response.json();
 }
 
 export async function getApifyDataset(datasetId: string): Promise<any[]> {
-  const response = await fetch(
-    `https://api.apify.com/v2/datasets/${datasetId}/items`,
-    {
-      headers: {
-        'Authorization': `Bearer ${APIFY_TOKEN}`,
-      },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to get Apify dataset: ${response.statusText}`);
-  }
-
+  const response = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items`, {
+    headers: { 'Authorization': `Bearer ${APIFY_TOKEN}` },
+  });
+  if (!response.ok) throw new Error(`Failed to get dataset: ${response.statusText}`);
   return response.json();
 }
 
@@ -60,44 +127,43 @@ export async function processAndInsertListings(
   datasetId: string,
   runId: string,
   searchUrl: string,
-  source: string
+  source: ScraperSource
 ): Promise<number> {
+  const scraper = SCRAPERS[source];
   const items = await getApifyDataset(datasetId);
   let insertedCount = 0;
 
   for (const item of items) {
-    const listing = {
-      title: item.title || `${item.year} ${item.make} ${item.model}`,
-      year: parseInt(item.year) || new Date().getFullYear(),
-      make: item.make || 'Unknown',
-      model: item.model || 'Unknown',
-      price: parseFloat(item.price) || 0,
-      mileage: parseFloat(item.odometer) || 0,
-      location: item.location || 'Unknown',
-      image_url: 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=400',
-      source_url: item.url || '',
-      source: source,
-      market_value: calculateMarketValue(
-        parseInt(item.year) || new Date().getFullYear(),
-        item.make || 'Unknown',
-        item.model || 'Unknown'
-      ),
-      description: item.description || '',
-      posted_at: item.postedAt || new Date().toISOString(),
-      is_active: true,
-    };
+    try {
+      const normalized = scraper.normalizeItem(item);
 
-    const dealScore = calculateDealScore(listing.price, listing.market_value);
+      // Skip items with no price or title
+      if (!normalized.price || normalized.price <= 0) continue;
+      if (normalized.title === 'Unknown Vehicle') continue;
 
-    const { error } = await supabase
-      .from('listings')
-      .insert({
-        ...listing,
+      const marketValue = calculateMarketValue(normalized.year, normalized.make, normalized.model);
+      const dealScore = calculateDealScore(normalized.price, marketValue);
+
+      // Check for duplicate by source_url
+      if (normalized.source_url) {
+        const { data: existing } = await supabase
+          .from('listings')
+          .select('id')
+          .eq('source_url', normalized.source_url)
+          .limit(1);
+        if (existing && existing.length > 0) continue;
+      }
+
+      const { error } = await supabase.from('listings').insert({
+        ...normalized,
+        market_value: marketValue,
         deal_score: dealScore,
+        is_active: true,
       });
 
-    if (!error) {
-      insertedCount++;
+      if (!error) insertedCount++;
+    } catch (err) {
+      console.error('Error processing item:', err);
     }
   }
 
@@ -115,25 +181,28 @@ export async function processAndInsertListings(
 }
 
 function calculateMarketValue(year: number, make: string, model: string): number {
-  // Simplified market value estimation based on year and make
   const currentYear = new Date().getFullYear();
   const age = currentYear - year;
-  let baseValue = 15000;
 
-  // Adjust for premium makes
   const premiumMakes: Record<string, number> = {
-    'BMW': 25000,
-    'Mercedes': 28000,
-    'Audi': 24000,
-    'Lexus': 22000,
-    'Porsche': 35000,
+    'BMW': 30000, 'Mercedes': 32000, 'Mercedes-Benz': 32000, 'Audi': 28000,
+    'Lexus': 26000, 'Porsche': 45000, 'Tesla': 35000, 'Land Rover': 35000,
+    'Toyota': 20000, 'Honda': 18000, 'Ford': 22000, 'Chevrolet': 20000,
+    'Jeep': 24000, 'RAM': 28000, 'GMC': 26000, 'Subaru': 20000,
+    'Mazda': 18000, 'Hyundai': 17000, 'Kia': 17000, 'Nissan': 17000,
+    'Volkswagen': 19000, 'Volvo': 24000, 'Acura': 22000, 'Infiniti': 22000,
+    'Cadillac': 28000, 'Lincoln': 26000, 'Dodge': 22000, 'Chrysler': 18000,
   };
 
-  if (make in premiumMakes) {
-    baseValue = premiumMakes[make];
-  }
+  let baseValue = premiumMakes[make] || 18000;
+  const depreciation = 1 - (age * 0.12);
+  return Math.max(3000, Math.round(baseValue * Math.max(0.15, depreciation)));
+}
 
-  // Depreciation: 15% per year
-  const depreciation = 1 - (age * 0.15);
-  return Math.max(2000, Math.round(baseValue * Math.max(0.2, depreciation)));
+export function getScraperSources() {
+  return Object.entries(SCRAPERS).map(([key, val]) => ({
+    id: key as ScraperSource,
+    name: val.name,
+    defaultUrl: val.defaultUrl,
+  }));
 }
