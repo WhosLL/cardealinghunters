@@ -1,171 +1,235 @@
-import { useState } from 'react';
-import { Shield, Play, RefreshCw, CheckCircle, XCircle, Clock, Link } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
-import { triggerApifyScrape, getApifyRunStatus, getApifyDataset, processAndInsertListings } from '../lib/apify';
+import { useState, useEffect } from 'react';
+import { Search, Play, CheckCircle, XCircle, Loader, Globe, Car } from 'lucide-react';
+import {
+  triggerApifyScrape,
+  getApifyRunStatus,
+  getApifyDataset,
+  processAndInsertListings,
+  getScraperSources,
+  ScraperSource,
+} from '../lib/apify';
+import { supabase } from '../lib/supabase';
 
 interface ScrapeJob {
   id: string;
-  url: string;
-  status: 'running' | 'succeeded' | 'failed';
-  startedAt: string;
-  listingsFound?: number;
+  apify_run_id: string;
+  source: string;
+  search_url: string;
+  status: string;
+  listings_added: number;
+  started_at: string;
+  completed_at: string | null;
 }
 
 export function AdminPage() {
-  const { profile } = useAuth();
-  const [scrapeUrl, setScrapeUrl] = useState('');
-  const [jobs, setJobs] = useState<ScrapeJob[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const sources = getScraperSources();
+  const [selectedSource, setSelectedSource] = useState<ScraperSource>('craigslist');
+  const [searchUrl, setSearchUrl] = useState(sources[0].defaultUrl);
+  const [isRunning, setIsRunning] = useState(false);
+  const [currentRunId, setCurrentRunId] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [scrapeHistory, setScrapeHistory] = useState<ScrapeJob[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleStartScrape = async () => {
-    if (!scrapeUrl.trim()) {
-      setError('Please enter a Craigslist search URL');
-      return;
-    }
-    setError('');
-    setLoading(true);
+  useEffect(() => {
+    fetchScrapeHistory();
+  }, []);
+
+  useEffect(() => {
+    const source = sources.find(s => s.id === selectedSource);
+    if (source) setSearchUrl(source.defaultUrl);
+  }, [selectedSource]);
+
+  const fetchScrapeHistory = async () => {
+    const { data } = await supabase
+      .from('scrape_runs')
+      .select('*')
+      .order('started_at', { ascending: false })
+      .limit(20);
+    if (data) setScrapeHistory(data);
+  };
+
+  const handleScrape = async () => {
+    if (!searchUrl.trim()) return;
+    setIsRunning(true);
+    setError(null);
+    setStatusMessage('Starting scrape...');
 
     try {
-      const runId = await triggerApifyScrape(scrapeUrl);
-      const newJob: ScrapeJob = {
-        id: runId,
-        url: scrapeUrl,
-        status: 'running',
-        startedAt: new Date().toISOString(),
-      };
-      setJobs(prev => [newJob, ...prev]);
-      setScrapeUrl('');
-      pollJob(runId);
-    } catch (err: any) {
-      setError(err.message || 'Failed to start scrape');
-    } finally {
-      setLoading(false);
+      const runId = await triggerApifyScrape(searchUrl, selectedSource);
+      setCurrentRunId(runId);
+      setStatusMessage('Scrape started. Polling for results...');
+
+      // Poll for completion
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusData = await getApifyRunStatus(runId);
+          const status = statusData.data?.status;
+
+          if (status === 'SUCCEEDED') {
+            clearInterval(pollInterval);
+            setStatusMessage('Scrape complete! Processing listings...');
+            const datasetId = statusData.data.defaultDatasetId;
+            const count = await processAndInsertListings(datasetId, runId, searchUrl, selectedSource);
+            setStatusMessage(`Done! Inserted ${count} new listings from ${sources.find(s => s.id === selectedSource)?.name}.`);
+            setIsRunning(false);
+            setCurrentRunId(null);
+            fetchScrapeHistory();
+          } else if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
+            clearInterval(pollInterval);
+            setError(`Scrape ${status.toLowerCase()}. Check your Apify dashboard for details.`);
+            setIsRunning(false);
+            setCurrentRunId(null);
+            await supabase.from('scrape_runs').update({ status: status.toLowerCase() }).eq('apify_run_id', runId);
+            fetchScrapeHistory();
+          } else {
+            setStatusMessage(`Status: ${status}... still working.`);
+          }
+        } catch (pollErr) {
+          console.error('Poll error:', pollErr);
+        }
+      }, 5000);
+
+      // Safety timeout after 5 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        if (isRunning) {
+          setStatusMessage('Scrape is taking longer than expected. Check Admin history for updates.');
+          setIsRunning(false);
+        }
+      }, 300000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start scrape');
+      setIsRunning(false);
     }
   };
 
-  const pollJob = async (runId: string) => {
-    const interval = setInterval(async () => {
-      try {
-        const status = await getApifyRunStatus(runId);
-        if (status.status === 'SUCCEEDED') {
-          clearInterval(interval);
-          try {
-            const data = await getApifyDataset(status.defaultDatasetId);
-            const count = await processAndInsertListings(data);
-            setJobs(prev =>
-              prev.map(j =>
-                j.id === runId ? { ...j, status: 'succeeded', listingsFound: count } : j
-              )
-            );
-          } catch {
-            setJobs(prev =>
-              prev.map(j =>
-                j.id === runId ? { ...j, status: 'succeeded', listingsFound: 0 } : j
-              )
-            );
-          }
-        } else if (status.status === 'FAILED' || status.status === 'ABORTED') {
-          clearInterval(interval);
-          setJobs(prev =>
-            prev.map(j => (j.id === runId ? { ...j, status: 'failed' } : j))
-          );
-        }
-      } catch {
-        clearInterval(interval);
-        setJobs(prev =>
-          prev.map(j => (j.id === runId ? { ...j, status: 'failed' } : j))
-        );
-      }
-    }, 5000);
+  const getSourceIcon = (source: string) => {
+    switch (source) {
+      case 'craigslist': return '\ud83d\udcdd';
+      case 'autotrader': return '\ud83d\ude97';
+      case 'carscom': return '\ud83c\udfce\ufe0f';
+      default: return '\ud83d\udd0d';
+    }
   };
 
-  const statusIcon = (status: string) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'running':
-        return <RefreshCw className="w-5 h-5 text-yellow-500 animate-spin" />;
-      case 'succeeded':
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
-      case 'failed':
-        return <XCircle className="w-5 h-5 text-red-500" />;
-      default:
-        return <Clock className="w-5 h-5 text-gray-500" />;
+      case 'running': return <Loader className="w-4 h-4 text-yellow-400 animate-spin" />;
+      case 'completed': case 'succeeded': return <CheckCircle className="w-4 h-4 text-green-400" />;
+      case 'failed': case 'aborted': return <XCircle className="w-4 h-4 text-red-400" />;
+      default: return <Loader className="w-4 h-4 text-gray-400" />;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="flex items-center gap-3 mb-8">
-          <Shield className="w-8 h-8 text-blue-500" />
-          <h1 className="text-3xl font-bold">Admin Panel</h1>
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="flex items-center gap-3 mb-8">
+        <Search className="w-8 h-8 text-blue-500" />
+        <h1 className="text-3xl font-bold text-white">Scrape Manager</h1>
+      </div>
+
+      {/* Source Selection */}
+      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
+        <h2 className="text-xl font-semibold text-white mb-4">Select Source</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+          {sources.map((source) => (
+            <button
+              key={source.id}
+              onClick={() => setSelectedSource(source.id)}
+              className={`p-4 rounded-lg border-2 transition-all text-left ${
+                selectedSource === source.id
+                  ? 'border-blue-500 bg-blue-500/10'
+                  : 'border-gray-700 bg-gray-900 hover:border-gray-600'
+              }`}
+            >
+              <div className="text-2xl mb-1">{getSourceIcon(source.id)}</div>
+              <div className="text-white font-semibold">{source.name}</div>
+              <div className="text-gray-400 text-xs mt-1 truncate">{source.defaultUrl.substring(0, 40)}...</div>
+            </button>
+          ))}
         </div>
 
+        {/* Search URL Input */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Search URL ({sources.find(s => s.id === selectedSource)?.name})
+          </label>
+          <input
+            type="url"
+            value={searchUrl}
+            onChange={(e) => setSearchUrl(e.target.value)}
+            placeholder="Paste a search URL..."
+            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+          />
+          <p className="text-gray-500 text-xs mt-2">
+            Go to {sources.find(s => s.id === selectedSource)?.name}, search for cars with your filters, then paste the URL here.
+          </p>
+        </div>
+
+        {/* Run Button */}
+        <button
+          onClick={handleScrape}
+          disabled={isRunning || !searchUrl.trim()}
+          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors"
+        >
+          {isRunning ? (
+            <>
+              <Loader className="w-5 h-5 animate-spin" />
+              Scraping...
+            </>
+          ) : (
+            <>
+              <Play className="w-5 h-5" />
+              Start Scrape
+            </>
+          )}
+        </button>
+
+        {/* Status / Error Messages */}
+        {statusMessage && (
+          <div className="mt-4 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-blue-300 text-sm">
+            {statusMessage}
+          </div>
+        )}
         {error && (
-          <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mb-6 text-red-400">
+          <div className="mt-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
             {error}
           </div>
         )}
+      </div>
 
-        {/* Trigger Scrape */}
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Trigger New Scrape</h2>
-          <p className="text-gray-400 mb-4">Enter a Craigslist search URL to scrape listings from.</p>
-          <div className="flex gap-3">
-            <div className="flex-1 relative">
-              <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-              <input
-                type="url"
-                value={scrapeUrl}
-                onChange={e => setScrapeUrl(e.target.value)}
-                placeholder="https://sfbay.craigslist.org/search/cta"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-              />
-            </div>
-            <button
-              onClick={handleStartScrape}
-              disabled={loading}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-colors"
-            >
-              <Play className="w-5 h-5" />
-              {loading ? 'Starting...' : 'Start Scrape'}
-            </button>
-          </div>
-        </div>
-
-        {/* Scrape History */}
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <h2 className="text-xl font-semibold mb-4">Scrape History</h2>
-          {jobs.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No scrapes yet. Trigger one above to get started.</p>
-          ) : (
-            <div className="space-y-3">
-              {jobs.map(job => (
-                <div key={job.id} className="bg-gray-800 rounded-lg p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {statusIcon(job.status)}
-                    <div>
-                      <p className="text-sm font-medium truncate max-w-md">{job.url}</p>
-                      <p className="text-xs text-gray-500">
-                        {new Date(job.startedAt).toLocaleString()}
-                        {job.listingsFound !== undefined && (
-                          <span className="ml-2 text-green-400">• {job.listingsFound} listings found</span>
-                        )}
-                      </p>
+      {/* Scrape History */}
+      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
+        <h2 className="text-xl font-semibold text-white mb-4">Scrape History</h2>
+        {scrapeHistory.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">No scrapes yet. Run your first one above!</p>
+        ) : (
+          <div className="space-y-3">
+            {scrapeHistory.map((job) => (
+              <div key={job.id} className="flex items-center justify-between bg-gray-900 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  {getStatusIcon(job.status)}
+                  <div>
+                    <div className="text-white text-sm font-medium flex items-center gap-2">
+                      <span>{getSourceIcon(job.source)}</span>
+                      <span className="capitalize">{job.source === 'carscom' ? 'Cars.com' : job.source}</span>
                     </div>
+                    <div className="text-gray-500 text-xs truncate max-w-md">{job.search_url}</div>
                   </div>
-                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                    job.status === 'running' ? 'bg-yellow-500/20 text-yellow-400' :
-                    job.status === 'succeeded' ? 'bg-green-500/20 text-green-400' :
-                    'bg-red-500/20 text-red-400'
-                  }`}>
-                    {job.status}
-                  </span>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+                <div className="text-right">
+                  <div className="text-green-400 text-sm font-semibold">
+                    {job.listings_added > 0 ? `+${job.listings_added} listings` : job.status}
+                  </div>
+                  <div className="text-gray-500 text-xs">
+                    {new Date(job.started_at).toLocaleDateString()} {new Date(job.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
