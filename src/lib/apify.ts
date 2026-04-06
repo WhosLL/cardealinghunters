@@ -1,7 +1,5 @@
 import { supabase } from './supabase';
 
-const APIFY_TOKEN = import.meta.env.VITE_APIFY_TOKEN;
-
 // Junk listing keywords - titles containing these get filtered out
 const JUNK_KEYWORDS = [
   'parts', 'parting out', 'parting', 'engine only', 'transmission only',
@@ -97,17 +95,14 @@ function extractYear(title: string): number {
 
 function extractMake(title: string): string {
   const titleLower = title.toLowerCase();
-  // Check multi-word makes first
   const multiWordMakes = ['land rover', 'alfa romeo', 'mercedes-benz'];
   for (const make of multiWordMakes) {
     if (titleLower.includes(make)) return KNOWN_MAKES[make];
   }
-  // Tokenize and check single-word makes
   const words = titleLower.split(/[\s,\-\/\|]+/);
   for (const word of words) {
     if (KNOWN_MAKES[word]) return KNOWN_MAKES[word];
   }
-  // Try partial matches for common abbreviations
   if (titleLower.includes('mercedes')) return 'Mercedes-Benz';
   if (titleLower.includes('land rover')) return 'Land Rover';
   return 'Unknown';
@@ -121,13 +116,11 @@ function extractModel(title: string, make: string): string {
   const models = COMMON_MODELS[make];
   if (models) {
     const titleLower = title.toLowerCase();
-    // Sort by length desc so "Grand Cherokee" matches before "Cherokee"
     const sorted = [...models].sort((a, b) => b.length - a.length);
     for (const model of sorted) {
       if (titleLower.includes(model.toLowerCase())) return model;
     }
   }
-  // Fallback: word right after make name in title
   const makeVariants = Object.entries(KNOWN_MAKES)
     .filter(([_, v]) => v === make)
     .map(([k]) => k);
@@ -220,203 +213,7 @@ function isJunkListing(title: string, price: number, year: number, make: string)
   return false;
 }
 
-// --- Scraper configurations ---
-
-export const SCRAPERS = {
-  craigslist: {
-    actorId: 'viralanalyzer~craigslist-scraper',
-    name: 'Craigslist',
-    buildInput: (searchUrl: string) => {
-      let city = 'losangeles';
-      const cityMatch = searchUrl.match(/https?:\/\/([a-z]+)\.craigslist/);
-      if (cityMatch) city = cityMatch[1];
-      return {
-        searchQueries: [''],
-        city: city,
-        category: 'cta',
-        sort: 'date',
-        maxResults: 100,
-      };
-    },
-    defaultUrl: 'https://losangeles.craigslist.org/search/cta',
-    normalizeItem: (item: any) => {
-      const title = item.title || '';
-      const rawDesc = item.description || item.body || item.title || '';
-      const fullText = `${title} ${rawDesc}`;
-      const mileage = extractMileage(fullText);
-      const seller = analyzeSellerLanguage(fullText);
-      return {
-        title: title || 'Unknown Vehicle',
-        year: extractYear(title),
-        make: extractMake(title),
-        model: extractModel(title, extractMake(title)),
-        price: parseFloat(String(item.price || item.numericPrice || '0').replace(/[^0-9.]/g, '')) || 0,
-        mileage: mileage,
-        location: item.location || item.area || 'Unknown',
-        image_url: item.imageUrl || item.image || '',
-        source_url: item.url || item.link || '',
-        source: 'craigslist' as const,
-        description: buildEnrichedDescription(rawDesc, seller),
-        posted_at: item.date || item.postedAt || new Date().toISOString(),
-      };
-    },
-  },
-  autotrader: {
-    actorId: 'epctex~autotrader-scraper',
-    name: 'AutoTrader',
-    buildInput: (searchUrl: string) => ({
-      startUrls: [searchUrl],
-      endPage: 3,
-      maxItems: 100,
-      proxy: { useApifyProxy: true, countryCode: 'US' },
-    }),
-    defaultUrl: 'https://www.autotrader.com/cars-for-sale/all-cars/los-angeles-ca-90001?searchRadius=50',
-    normalizeItem: (item: any) => {
-      const title = item.title || `${item.year || ''} ${item.brand || item.make || ''} ${item.model || ''}`.trim() || 'Unknown Vehicle';
-      const rawDesc = item.features ? Object.values(item.features).flat().slice(0, 5).join(', ') : '';
-      const fullText = `${title} ${rawDesc} ${item.sellerName || ''}`;
-      const seller = analyzeSellerLanguage(fullText);
-      if (seller.type === 'unknown') seller.type = 'dealer';
-      return {
-        title,
-        year: parseInt(item.year) || new Date().getFullYear(),
-        make: item.brand || item.make || extractMake(title),
-        model: item.model || extractModel(title, item.brand || item.make || extractMake(title)),
-        price: parseFloat(String(item.price).replace(/[^0-9.]/g, '')) || 0,
-        mileage: parseFloat(String(item.mileage || '0').replace(/[^0-9]/g, '')) || 0,
-        location: item.ownerTitle || 'Unknown',
-        image_url: item.images?.[0] || '',
-        source_url: item.url || '',
-        source: 'autotrader' as const,
-        description: buildEnrichedDescription(rawDesc, seller),
-        posted_at: new Date().toISOString(),
-      };
-    },
-  },
-  carscom: {
-    actorId: 'voyn~cars-scraper',
-    name: 'Cars.com',
-    buildInput: (searchUrl: string) => ({
-      list_url: [searchUrl],
-    }),
-    defaultUrl: 'https://www.cars.com/shopping/results/?stock_type=used&makes[]=&maximum_distance=50&zip=90001&sort=listed_at_desc',
-    normalizeItem: (item: any) => {
-      const title = item.name || `${item.year || ''} ${item.make || ''} ${item.model || ''}`.trim() || 'Unknown Vehicle';
-      const rawDesc = (item.features || []).slice(0, 5).join(', ');
-      const fullText = `${title} ${rawDesc} ${item.dealer_name || ''}`;
-      const seller = analyzeSellerLanguage(fullText);
-      return {
-        title,
-        year: parseInt(item.year) || new Date().getFullYear(),
-        make: item.make || extractMake(title),
-        model: item.model || extractModel(title, item.make || extractMake(title)),
-        price: parseFloat(String(item.price).replace(/[^0-9.]/g, '')) || 0,
-        mileage: parseFloat(String(item.mileage || '0').replace(/[^0-9]/g, '')) || 0,
-        location: 'Cars.com Listing',
-        image_url: (item.images || []).find((img: string) => img) || '',
-        source_url: item.record_url || item.url || '',
-        source: 'carscom' as const,
-        description: buildEnrichedDescription(rawDesc, seller),
-        posted_at: new Date().toISOString(),
-      };
-    },
-  },
-} as const;
-
-export type ScraperSource = keyof typeof SCRAPERS;
-
-// --- API functions ---
-
-export async function triggerApifyScrape(searchUrl: string, source: ScraperSource = 'craigslist'): Promise<string> {
-  const scraper = SCRAPERS[source];
-  const input = scraper.buildInput(searchUrl);
-  const response = await fetch(`https://api.apify.com/v2/acts/${scraper.actorId}/runs?token=${APIFY_TOKEN}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Failed to trigger ${scraper.name} scrape: ${response.status} ${errText}`);
-  }
-  const data = await response.json();
-  await supabase.from('scrape_runs').insert({
-    apify_run_id: data.data.id,
-    source: source,
-    search_url: searchUrl,
-    status: 'running',
-    listings_added: 0,
-    started_at: new Date().toISOString(),
-  });
-  return data.data.id;
-}
-
-export async function getApifyRunStatus(runId: string): Promise<any> {
-  const response = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_TOKEN}`);
-  if (!response.ok) throw new Error(`Failed to get run status: ${response.statusText}`);
-  return response.json();
-}
-
-export async function getApifyDataset(datasetId: string): Promise<any[]> {
-  const response = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_TOKEN}`);
-  if (!response.ok) throw new Error(`Failed to get dataset: ${response.statusText}`);
-  return response.json();
-}
-
-export async function processAndInsertListings(
-  datasetId: string,
-  runId: string,
-  searchUrl: string,
-  source: ScraperSource
-): Promise<number> {
-  const scraper = SCRAPERS[source];
-  const items = await getApifyDataset(datasetId);
-  let insertedCount = 0;
-
-  for (const item of items) {
-    try {
-      const normalized = scraper.normalizeItem(item);
-
-      // Filter junk
-      if (isJunkListing(normalized.title, normalized.price, extractYear(normalized.title), extractMake(normalized.title))) continue;
-      if (normalized.title === 'Unknown Vehicle') continue;
-
-      const marketValue = calculateMarketValue(normalized.year, normalized.make, normalized.model);
-      const dealScore = calculateDealScore(normalized.price, marketValue);
-
-      // Deduplicate by source_url
-      if (normalized.source_url) {
-        const { data: existing } = await supabase
-          .from('listings')
-          .select('id')
-          .eq('source_url', normalized.source_url)
-          .limit(1);
-        if (existing && existing.length > 0) continue;
-      }
-
-      const { error } = await supabase.from('listings').insert({
-        ...normalized,
-        market_value: marketValue,
-        deal_score: dealScore,
-        is_active: true,
-      });
-      if (!error) insertedCount++;
-    } catch (err) {
-      console.error('Error processing item:', err);
-    }
-  }
-
-  await supabase
-    .from('scrape_runs')
-    .update({
-      status: 'completed',
-      listings_added: insertedCount,
-      completed_at: new Date().toISOString(),
-    })
-    .eq('apify_run_id', runId);
-
-  return insertedCount;
-}
+// --- Market value & deal scoring ---
 
 function calculateDealScore(price: number, marketValue: number): string {
   if (marketValue <= 0) return 'fair';
@@ -448,10 +245,184 @@ function calculateMarketValue(year: number, make: string, _model: string): numbe
   return Math.max(3000, Math.round(baseValue * Math.max(0.15, depreciation)));
 }
 
+// =============================================
+// NEW: Direct Craigslist scraping (no Apify)
+// =============================================
+
+export async function scrapeCraigslist(searchUrl: string): Promise<any[]> {
+  const response = await fetch(`/api/scrape-craigslist?searchUrl=${encodeURIComponent(searchUrl)}`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Scrape failed' }));
+    throw new Error(err.error || `Scrape failed: ${response.status}`);
+  }
+  const data = await response.json();
+  return data.listings || [];
+}
+
+export async function processRawListings(rawListings: any[]): Promise<number> {
+  let insertedCount = 0;
+
+  for (const item of rawListings) {
+    try {
+      const title = item.title || '';
+      const price = parseFloat(item.price) || 0;
+      const year = extractYear(title);
+      const make = extractMake(title);
+      const model = extractModel(title, make);
+      const fullText = `${title} ${item.description || ''}`;
+      const mileage = extractMileage(fullText);
+      const seller = analyzeSellerLanguage(fullText);
+
+      if (isJunkListing(title, price, year, make)) continue;
+      if (!title || title.length < 5) continue;
+
+      const marketValue = calculateMarketValue(year, make, model);
+      const dealScore = calculateDealScore(price, marketValue);
+
+      // Deduplicate by source_url
+      if (item.url) {
+        const { data: existing } = await supabase
+          .from('listings')
+          .select('id')
+          .eq('source_url', item.url)
+          .limit(1);
+        if (existing && existing.length > 0) continue;
+      }
+
+      const { error } = await supabase.from('listings').insert({
+        title,
+        year,
+        make,
+        model,
+        price,
+        mileage,
+        location: item.location || 'Unknown',
+        image_url: item.imageUrl || '',
+        source_url: item.url || '',
+        source: 'craigslist',
+        description: buildEnrichedDescription(item.description || title, seller),
+        market_value: marketValue,
+        deal_score: dealScore,
+        is_active: true,
+        posted_at: new Date().toISOString(),
+      });
+      if (!error) insertedCount++;
+    } catch (err) {
+      console.error('Error processing item:', err);
+    }
+  }
+
+  return insertedCount;
+}
+
+// =============================================
+// LEGACY: Apify functions (kept for AdminPage)
+// =============================================
+
+const APIFY_TOKEN = import.meta.env.VITE_APIFY_TOKEN;
+
+export const SCRAPERS = {
+  craigslist: {
+    actorId: 'viralanalyzer~craigslist-scraper',
+    name: 'Craigslist',
+    buildInput: (searchUrl: string) => {
+      let city = 'losangeles';
+      const cityMatch = searchUrl.match(/https?:\/\/([a-z]+)\.craigslist/);
+      if (cityMatch) city = cityMatch[1];
+      return { searchQueries: [''], city, category: 'cta', sort: 'date', maxResults: 100 };
+    },
+    defaultUrl: 'https://losangeles.craigslist.org/search/cta',
+    normalizeItem: (item: any) => {
+      const title = item.title || '';
+      const rawDesc = item.description || item.body || item.title || '';
+      const fullText = `${title} ${rawDesc}`;
+      const mileage = extractMileage(fullText);
+      const seller = analyzeSellerLanguage(fullText);
+      return {
+        title: title || 'Unknown Vehicle',
+        year: extractYear(title),
+        make: extractMake(title),
+        model: extractModel(title, extractMake(title)),
+        price: parseFloat(String(item.price || item.numericPrice || '0').replace(/[^0-9.]/g, '')) || 0,
+        mileage,
+        location: item.location || item.area || 'Unknown',
+        image_url: item.imageUrl || item.image || '',
+        source_url: item.url || item.link || '',
+        source: 'craigslist' as const,
+        description: buildEnrichedDescription(rawDesc, seller),
+        posted_at: item.date || item.postedAt || new Date().toISOString(),
+      };
+    },
+  },
+} as const;
+
+export type ScraperSource = keyof typeof SCRAPERS;
+
+export async function triggerApifyScrape(searchUrl: string, source: ScraperSource = 'craigslist'): Promise<string> {
+  const scraper = SCRAPERS[source];
+  const input = scraper.buildInput(searchUrl);
+  const response = await fetch(`https://api.apify.com/v2/acts/${scraper.actorId}/runs?token=${APIFY_TOKEN}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to trigger scrape: ${response.status} ${errText}`);
+  }
+  const data = await response.json();
+  await supabase.from('scrape_runs').insert({
+    apify_run_id: data.data.id, source, search_url: searchUrl,
+    status: 'running', listings_added: 0, started_at: new Date().toISOString(),
+  });
+  return data.data.id;
+}
+
+export async function getApifyRunStatus(runId: string): Promise<any> {
+  const response = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_TOKEN}`);
+  if (!response.ok) throw new Error(`Failed to get run status: ${response.statusText}`);
+  return response.json();
+}
+
+export async function getApifyDataset(datasetId: string): Promise<any[]> {
+  const response = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_TOKEN}`);
+  if (!response.ok) throw new Error(`Failed to get dataset: ${response.statusText}`);
+  return response.json();
+}
+
+export async function processAndInsertListings(
+  datasetId: string, runId: string, searchUrl: string, source: ScraperSource
+): Promise<number> {
+  const scraper = SCRAPERS[source];
+  const items = await getApifyDataset(datasetId);
+  let insertedCount = 0;
+  for (const item of items) {
+    try {
+      const normalized = scraper.normalizeItem(item);
+      if (isJunkListing(normalized.title, normalized.price, extractYear(normalized.title), extractMake(normalized.title))) continue;
+      if (normalized.title === 'Unknown Vehicle') continue;
+      const marketValue = calculateMarketValue(normalized.year, normalized.make, normalized.model);
+      const dealScore = calculateDealScore(normalized.price, marketValue);
+      if (normalized.source_url) {
+        const { data: existing } = await supabase.from('listings').select('id').eq('source_url', normalized.source_url).limit(1);
+        if (existing && existing.length > 0) continue;
+      }
+      const { error } = await supabase.from('listings').insert({
+        ...normalized, market_value: marketValue, deal_score: dealScore, is_active: true,
+      });
+      if (!error) insertedCount++;
+    } catch (err) {
+      console.error('Error processing item:', err);
+    }
+  }
+  await supabase.from('scrape_runs').update({
+    status: 'completed', listings_added: insertedCount, completed_at: new Date().toISOString(),
+  }).eq('apify_run_id', runId);
+  return insertedCount;
+}
+
 export function getScraperSources() {
-  return Object.entries(SCRAPERS).map(([key, val]) => ({
-    id: key as ScraperSource,
-    name: val.name,
-    defaultUrl: val.defaultUrl,
-  }));
+  return [
+    { id: 'craigslist' as ScraperSource, name: 'Craigslist', defaultUrl: 'https://losangeles.craigslist.org/search/cta' },
+  ];
 }
