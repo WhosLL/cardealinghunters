@@ -1,182 +1,173 @@
-import { useState, useCallback } from 'react';
-import { ListingCard } from '../components/ListingCard';
-import { Filters } from '../components/Filters';
+import { useState } from 'react';
 import { useListings, ListingsFilters } from '../hooks/useListings';
-import { scrapeCraigslist, processRawListings } from '../lib/apify';
-import { supabase } from '../lib/supabase';
+import { Filters } from '../components/Filters';
+import { ListingCard } from '../components/ListingCard';
+import { RefreshCw, Loader } from 'lucide-react';
 
 export function BrowsePage() {
   const [filters, setFilters] = useState<ListingsFilters>({});
-  const { listings, loading, error, totalCount, viewedCount, handleLike, handleSkip } = useListings(filters);
 
-  const [showScrapePanel, setShowScrapePanel] = useState(false);
-  const [scrapeUrl, setScrapeUrl] = useState('https://losangeles.craigslist.org/search/cta');
-  const [scraping, setScraping] = useState(false);
-  const [scrapeStatus, setScrapeStatus] = useState('');
-  const [scrapeError, setScrapeError] = useState('');
+  const { listings, loading, error, totalCount, handleLike, handleSkip, refetch } = useListings(filters);
+  const [seeding, setSeeding] = useState(false);
+  const [seedError, setSeedError] = useState<string | null>(null);
 
-  const handleFilterChange = (newFilters: ListingsFilters) => {
-    setFilters(newFilters);
-  };
-
-  const handleReset = () => {
-    setFilters({});
-  };
-
-  const handleScrape = useCallback(async () => {
-    if (!scrapeUrl.trim() || scraping) return;
-    setScraping(true);
-    setScrapeError('');
-    setScrapeStatus('Scraping Craigslist...');
-
+  const handleSeedListings = async () => {
+    setSeeding(true);
+    setSeedError(null);
     try {
-      const rawListings = await scrapeCraigslist(scrapeUrl);
-      setScrapeStatus(`Found ${rawListings.length} results. Processing & filtering...`);
-      const count = await processRawListings(rawListings);
-      setScrapeStatus(`Done! Added ${count} new listings.`);
-      setFilters(prev => ({ ...prev }));
-    } catch (err) {
-      setScrapeError(err instanceof Error ? err.message : 'Scrape failed');
+      const response = await fetch('/api/seed-listings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to seed listings');
+      }
+
+      await refetch();
+    } catch (err: any) {
+      setSeedError(err?.message || 'Failed to seed listings');
     } finally {
-      setScraping(false);
+      setSeeding(false);
     }
-  }, [scrapeUrl, scraping]);
+  };
 
-  const handleClearAndScrape = useCallback(async () => {
-    if (scraping) return;
-    setScraping(true);
-    setScrapeError('');
-    setScrapeStatus('Clearing old listings...');
-    try {
-      await supabase.from('listings').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      setScrapeStatus('Cleared. Starting fresh scrape...');
-      setScraping(false);
-      handleScrape();
-    } catch (err) {
-      setScrapeError('Failed to clear old listings');
-      setScraping(false);
-    }
-  }, [scraping, handleScrape]);
+  const handleRefresh = async () => {
+    await refetch();
+  };
 
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-bold text-white mb-2">Find Great Car Deals</h1>
-          <p className="text-gray-400">Showing {listings.length} of {totalCount} available listings</p>
-        </div>
-        <button
-          onClick={() => setShowScrapePanel(!showScrapePanel)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
-            showScrapePanel
-              ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              : 'bg-green-600 text-white hover:bg-green-700'
-          }`}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          {showScrapePanel ? 'Hide Scraper' : 'Fresh Scrape'}
-        </button>
-      </div>
-
-      {showScrapePanel && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 mb-6">
-          <p className="text-gray-400 text-sm mb-3">
-            Paste any Craigslist search URL, or use the default to scrape LA cars.
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      {/* Hero Section */}
+      <div className="relative py-12 px-4 sm:px-6 lg:px-8 border-b border-slate-800/50">
+        <div className="max-w-7xl mx-auto">
+          <h1 className="text-4xl sm:text-5xl font-bold mb-3 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+            Your Deal Feed
+          </h1>
+          <p className="text-lg text-gray-400 mb-6">
+            {totalCount > 0 ? (
+              <>
+                Showing <span className="font-semibold text-blue-400">{listings.length}</span> of{' '}
+                <span className="font-semibold text-purple-400">{totalCount}</span> listings
+              </>
+            ) : (
+              'No listings yet. Seed demo data to get started.'
+            )}
           </p>
 
-          <div className="flex gap-2 mb-3">
-            <input
-              type="url"
-              value={scrapeUrl}
-              onChange={(e) => setScrapeUrl(e.target.value)}
-              disabled={scraping}
-              placeholder="Craigslist search URL..."
-              className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:opacity-50"
-            />
+          {/* Action buttons */}
+          <div className="flex flex-col sm:flex-row gap-3">
             <button
-              onClick={handleScrape}
-              disabled={scraping || !scrapeUrl.trim()}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold px-5 py-2 rounded-lg flex items-center gap-2 text-sm transition-colors whitespace-nowrap"
+              onClick={handleSeedListings}
+              disabled={seeding}
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
             >
-              {scraping ? (
+              {seeding ? (
                 <>
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                  </svg>
-                  Scraping...
+                  <Loader className="w-5 h-5 animate-spin" />
+                  Seeding...
                 </>
               ) : (
-                'Scrape Now'
+                <>
+                  <RefreshCw className="w-5 h-5" />
+                  Load Demo Listings
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleRefresh}
+              disabled={loading}
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 disabled:cursor-not-allowed text-gray-300 font-semibold rounded-lg transition-all duration-200 border border-slate-700 hover:border-slate-600"
+            >
+              <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+
+          {seedError && (
+            <div className="mt-4 p-3 bg-red-900/30 border border-red-500/50 rounded-lg text-red-300 text-sm">
+              {seedError}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Filters Section */}
+      <div className="border-b border-slate-800/50 bg-slate-900/30 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <Filters onFiltersChange={(f: ListingsFilters) => setFilters(f)} onReset={() => setFilters({})} />
+        </div>
+      </div>
+
+      {/* Error state */}
+      {error && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="p-6 bg-red-900/30 border border-red-500/50 rounded-lg text-red-300 text-center">
+            {error}
+          </div>
+        </div>
+      )}
+
+      {/* Loading state */}
+      {loading && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <div
+                key={i}
+                className="rounded-2xl overflow-hidden bg-gradient-to-br from-slate-800/50 to-slate-900/50 h-96 animate-pulse"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Listings grid */}
+      {!loading && listings.length > 0 && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {listings.map(listing => (
+              <ListingCard
+                key={listing.id}
+                listing={listing}
+                onLike={handleLike}
+                onSkip={handleSkip}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && listings.length === 0 && !error && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="text-center">
+            <h3 className="text-2xl font-bold text-gray-300 mb-3">No listings found</h3>
+            <p className="text-gray-500 mb-6">
+              Try adjusting your filters or seed demo data to get started.
+            </p>
+            <button
+              onClick={handleSeedListings}
+              disabled={seeding}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all duration-200"
+            >
+              {seeding ? (
+                <>
+                  <Loader className="w-5 h-5 animate-spin" />
+                  Seeding...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-5 h-5" />
+                  Load Demo Listings
+                </>
               )}
             </button>
           </div>
-
-          <button
-            onClick={handleClearAndScrape}
-            disabled={scraping}
-            className="text-xs text-red-400 hover:text-red-300 underline disabled:opacity-50 disabled:no-underline mb-3"
-          >
-            Clear all old listings & scrape fresh
-          </button>
-
-          {scrapeStatus && (
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-blue-300 text-sm mt-2">
-              {scrapeStatus}
-            </div>
-          )}
-          {scrapeError && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm mt-2">
-              {scrapeError}
-            </div>
-          )}
         </div>
       )}
-
-      <Filters onFiltersChange={handleFilterChange} onReset={handleReset} />
-
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-400"></div>
-            <p className="mt-4 text-gray-400">Loading listings...</p>
-          </div>
-        </div>
-      )}
-
-      {error && (
-        <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded-lg mb-4">{error}</div>
-      )}
-
-      {!loading && listings.length === 0 && !error && (
-        <div className="text-center py-12">
-          <p className="text-gray-400 text-lg mb-4">No listings available</p>
-          <p className="text-gray-500 mb-6">Try adjusting your filters or scrape fresh data</p>
-          {!showScrapePanel && (
-            <button
-              onClick={() => setShowScrapePanel(true)}
-              className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
-            >
-              Scrape Fresh Listings
-            </button>
-          )}
-        </div>
-      )}
-
-      {!loading && listings.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {listings.map((listing) => (
-            <ListingCard
-              key={listing.id}
-              listing={listing}
-              onLike={handleLike}
-              onSkip={handleSkip}
-            />
-          ))}
-        </div>
-      )}
-    </main>
+    </div>
   );
 }
