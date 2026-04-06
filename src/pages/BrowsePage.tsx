@@ -2,24 +2,15 @@ import { useState, useCallback } from 'react';
 import { ListingCard } from '../components/ListingCard';
 import { Filters } from '../components/Filters';
 import { useListings, ListingsFilters } from '../hooks/useListings';
-import {
-  triggerApifyScrape,
-  getApifyRunStatus,
-  processAndInsertListings,
-  getScraperSources,
-  ScraperSource,
-} from '../lib/apify';
+import { scrapeCraigslist, processRawListings } from '../lib/apify';
 import { supabase } from '../lib/supabase';
 
 export function BrowsePage() {
   const [filters, setFilters] = useState<ListingsFilters>({});
   const { listings, loading, error, totalCount, viewedCount, handleLike, handleSkip } = useListings(filters);
 
-  // Scrape state
-  const sources = getScraperSources();
   const [showScrapePanel, setShowScrapePanel] = useState(false);
-  const [selectedSource, setSelectedSource] = useState<ScraperSource>('craigslist');
-  const [scrapeUrl, setScrapeUrl] = useState(sources[0].defaultUrl);
+  const [scrapeUrl, setScrapeUrl] = useState('https://losangeles.craigslist.org/search/cta');
   const [scraping, setScraping] = useState(false);
   const [scrapeStatus, setScrapeStatus] = useState('');
   const [scrapeError, setScrapeError] = useState('');
@@ -32,62 +23,24 @@ export function BrowsePage() {
     setFilters({});
   };
 
-  const handleSourceChange = (sourceId: ScraperSource) => {
-    setSelectedSource(sourceId);
-    const source = sources.find(s => s.id === sourceId);
-    if (source) setScrapeUrl(source.defaultUrl);
-  };
-
   const handleScrape = useCallback(async () => {
     if (!scrapeUrl.trim() || scraping) return;
     setScraping(true);
     setScrapeError('');
-    setScrapeStatus('Starting scrape...');
+    setScrapeStatus('Scraping Craigslist...');
 
     try {
-      const runId = await triggerApifyScrape(scrapeUrl, selectedSource);
-      setScrapeStatus('Scraping in progress... this takes 1-3 minutes.');
-
-      const pollInterval = setInterval(async () => {
-        try {
-          const statusData = await getApifyRunStatus(runId);
-          const status = statusData.data?.status;
-
-          if (status === 'SUCCEEDED') {
-            clearInterval(pollInterval);
-            setScrapeStatus('Processing results...');
-            const datasetId = statusData.data.defaultDatasetId;
-            const count = await processAndInsertListings(datasetId, runId, scrapeUrl, selectedSource);
-            const sourceName = sources.find(s => s.id === selectedSource)?.name || selectedSource;
-            setScrapeStatus(`Done! Added ${count} listings from ${sourceName}. Refresh filters to see them.`);
-            setScraping(false);
-            // Auto-refresh listings
-            setFilters(prev => ({ ...prev }));
-          } else if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
-            clearInterval(pollInterval);
-            setScrapeError(`Scrape ${status.toLowerCase()}. Try again or check Apify dashboard.`);
-            setScraping(false);
-          } else {
-            setScrapeStatus(`Scraping... (${status})`);
-          }
-        } catch (pollErr) {
-          console.error('Poll error:', pollErr);
-        }
-      }, 5000);
-
-      // Safety timeout 5min
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        if (scraping) {
-          setScrapeStatus('Taking longer than expected. Check back shortly.');
-          setScraping(false);
-        }
-      }, 300000);
+      const rawListings = await scrapeCraigslist(scrapeUrl);
+      setScrapeStatus(`Found ${rawListings.length} results. Processing & filtering...`);
+      const count = await processRawListings(rawListings);
+      setScrapeStatus(`Done! Added ${count} new listings.`);
+      setFilters(prev => ({ ...prev }));
     } catch (err) {
-      setScrapeError(err instanceof Error ? err.message : 'Failed to start scrape');
+      setScrapeError(err instanceof Error ? err.message : 'Scrape failed');
+    } finally {
       setScraping(false);
     }
-  }, [scrapeUrl, selectedSource, scraping, sources]);
+  }, [scrapeUrl, scraping]);
 
   const handleClearAndScrape = useCallback(async () => {
     if (scraping) return;
@@ -96,7 +49,7 @@ export function BrowsePage() {
     setScrapeStatus('Clearing old listings...');
     try {
       await supabase.from('listings').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      setScrapeStatus('Old listings cleared. Starting fresh scrape...');
+      setScrapeStatus('Cleared. Starting fresh scrape...');
       setScraping(false);
       handleScrape();
     } catch (err) {
@@ -127,37 +80,19 @@ export function BrowsePage() {
         </button>
       </div>
 
-      {/* Scrape Panel */}
       {showScrapePanel && (
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 mb-6">
-          <div className="flex flex-col sm:flex-row gap-4 mb-4">
-            {/* Source Selector */}
-            <div className="flex gap-2">
-              {sources.map((source) => (
-                <button
-                  key={source.id}
-                  onClick={() => handleSourceChange(source.id)}
-                  disabled={scraping}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    selectedSource === source.id
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  } disabled:opacity-50`}
-                >
-                  {source.name}
-                </button>
-              ))}
-            </div>
-          </div>
+          <p className="text-gray-400 text-sm mb-3">
+            Paste any Craigslist search URL, or use the default to scrape LA cars.
+          </p>
 
-          {/* URL Input */}
           <div className="flex gap-2 mb-3">
             <input
               type="url"
               value={scrapeUrl}
               onChange={(e) => setScrapeUrl(e.target.value)}
               disabled={scraping}
-              placeholder="Search URL..."
+              placeholder="Craigslist search URL..."
               className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:opacity-50"
             />
             <button
@@ -179,24 +114,16 @@ export function BrowsePage() {
             </button>
           </div>
 
-          {/* Clear + Scrape option */}
-          <div className="flex items-center gap-3 mb-3">
-            <button
-              onClick={handleClearAndScrape}
-              disabled={scraping}
-              className="text-xs text-red-400 hover:text-red-300 underline disabled:opacity-50 disabled:no-underline"
-            >
-              Clear all old listings & scrape fresh
-            </button>
-            <span className="text-gray-600 text-xs">|</span>
-            <p className="text-gray-500 text-xs">
-              Paste any {sources.find(s => s.id === selectedSource)?.name} search URL, or use the default to scrape all cars.
-            </p>
-          </div>
+          <button
+            onClick={handleClearAndScrape}
+            disabled={scraping}
+            className="text-xs text-red-400 hover:text-red-300 underline disabled:opacity-50 disabled:no-underline mb-3"
+          >
+            Clear all old listings & scrape fresh
+          </button>
 
-          {/* Status messages */}
           {scrapeStatus && (
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-blue-300 text-sm">
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-blue-300 text-sm mt-2">
               {scrapeStatus}
             </div>
           )}
