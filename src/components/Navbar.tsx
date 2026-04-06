@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, Car, LogOut } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { NotificationBell } from './NotificationBell';
 
 export function Navbar() {
   const { user, profile, logout } = useAuth();
@@ -55,6 +56,7 @@ export function Navbar() {
           <div className="hidden md:flex items-center gap-4">
             {user && (
               <>
+                <NotificationBell />
                 <div className="text-right">
                   <p className="text-sm font-medium text-white">{profile?.full_name}</p>
                   <p className="text-xs text-gray-400">{user.email}</p>
@@ -111,6 +113,10 @@ export function Navbar() {
               Admin
             </Link>
             <div className="border-t border-gray-800 pt-4">
+              <div className="flex items-center gap-3 mb-4">
+                <NotificationBell />
+                <span className="text-gray-300 text-sm">Notifications</span>
+              </div>
               <p className="text-sm font-medium text-white mb-2">{profile?.full_name}</p>
               <p className="text-xs text-gray-400 mb-4">{user.email}</p>
               <button
@@ -127,3 +133,4 @@ export function Navbar() {
     </nav>
   );
 }
+
