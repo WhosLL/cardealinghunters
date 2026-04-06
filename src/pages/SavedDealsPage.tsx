@@ -1,9 +1,8 @@
-import { Navbar } from '../components/Navbar';
 import { ListingCard } from '../components/ListingCard';
 import { useSavedListings } from '../hooks/useListings';
 
 export function SavedDealsPage() {
-  const { listings, loading, error, handleUnlike } = useSavedListings();
+  const { savedListings: listings, loading, error, handleUnlike } = useSavedListings();
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -35,10 +34,18 @@ export function SavedDealsPage() {
       {!loading && listings.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {listings.map((listing) => (
-            <ListingCard key={listing.id} listing={listing} onLike={() => {}} onSkip={() => {}} onUnlike={handleUnlike} showUnlike={true} />
+            <ListingCard
+              key={listing.id}
+              listing={listing}
+              onLike={() => {}}
+              onSkip={() => {}}
+              onUnlike={handleUnlike}
+              showUnlike={true}
+            />
           ))}
         </div>
       )}
     </main>
   );
 }
+
