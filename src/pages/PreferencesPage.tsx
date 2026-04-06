@@ -1,238 +1,415 @@
 import { useState, useEffect } from 'react';
-import { Settings, Heart, X, MapPin, DollarSign, Gauge, Car, Save } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { usePreferences } from '../hooks/usePreferences';
+import { X, Plus, Heart, Zap } from 'lucide-react';
 
-const CAR_MAKES = [
-  'Toyota', 'Honda', 'Ford', 'Chevrolet', 'BMW', 'Mercedes',
-  'Nissan', 'Hyundai', 'Kia', 'Subaru', 'Volkswagen', 'Mazda',
-  'Audi', 'Lexus', 'Jeep', 'Ram', 'GMC', 'Buick', 'Cadillac', 'Dodge',
-];
+interface UserPreferencesData {
+  preferred_makes: string[];
+  preferred_locations: string[];
+  preferred_models: string[];
+  preferred_price_min: number;
+  preferred_price_max: number;
+  preferred_mileage_max: number;
+  year_min: number;
+  year_max: number;
+  condition: 'New' | 'Used' | 'Any';
+  body_types: string[];
+  notify_enabled: boolean;
+  total_likes: number;
+  total_skips: number;
+}
+
+const BODY_TYPE_OPTIONS = ['Sedan', 'SUV', 'Truck', 'Coupe', 'Convertible', 'Van/Minivan', 'Wagon', 'Hatchback'];
+const CONDITION_OPTIONS = ['New', 'Used', 'Any'];
 
 export function PreferencesPage() {
-  const { profile } = useAuth();
-  const { preferences, loading, error, updatePreferences, refetch } = usePreferences();
+  const { user, loading: authLoading } = useAuth();
+  const [preferences, setPreferences] = useState<UserPreferencesData>({
+    preferred_makes: [],
+    preferred_locations: [],
+    preferred_models: [],
+    preferred_price_min: 5000,
+    preferred_price_max: 50000,
+    preferred_mileage_max: 150000,
+    year_min: 2010,
+    year_max: 2026,
+    condition: 'Any',
+    body_types: [],
+    notify_enabled: false,
+    total_likes: 0,
+    total_skips: 0,
+  });
 
-  const [editMakes, setEditMakes] = useState<string[]>([]);
-  const [editLocations, setEditLocations] = useState<string[]>([]);
-  const [newLocation, setNewLocation] = useState('');
-  const [editPriceMin, setEditPriceMin] = useState('');
-  const [editPriceMax, setEditPriceMax] = useState('');
-  const [editMileage, setEditMileage] = useState('');
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState('');
-  const [makesOpen, setMakesOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [newMake, setNewMake] = useState('');
+  const [newLocation, setNewLocation] = useState('');
+  const [newModel, setNewModel] = useState('');
 
   useEffect(() => {
-    if (preferences) {
-      setEditMakes(preferences.preferred_makes || []);
-      setEditLocations(preferences.preferred_locations || []);
-      setEditPriceMin(preferences.preferred_price_min?.toString() || '');
-      setEditPriceMax(preferences.preferred_price_max?.toString() || '');
-      setEditMileage(preferences.preferred_mileage_max?.toString() || '');
+    if (user && !authLoading) {
+      fetchPreferences();
     }
-  }, [preferences]);
+  }, [user, authLoading]);
 
-  const handleMakeToggle = (make: string) => {
-    setEditMakes(prev =>
-      prev.includes(make) ? prev.filter(m => m !== make) : [...prev, make]
-    );
-  };
-
-  const handleAddLocation = () => {
-    if (newLocation.trim() && !editLocations.includes(newLocation.trim())) {
-      setEditLocations(prev => [...prev, newLocation.trim()]);
-      setNewLocation('');
-    }
-  };
-
-  const handleRemoveLocation = (loc: string) => {
-    setEditLocations(prev => prev.filter(l => l !== loc));
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    setSaveMsg('');
+  const fetchPreferences = async () => {
     try {
-      await updatePreferences({
-        preferred_makes: editMakes,
-        preferred_locations: editLocations,
-        preferred_price_min: editPriceMin ? parseInt(editPriceMin) : null,
-        preferred_price_max: editPriceMax ? parseInt(editPriceMax) : null,
-        preferred_mileage_max: editMileage ? parseInt(editMileage) : null,
-      });
-      setSaveMsg('Preferences saved!');
-      refetch();
-      setTimeout(() => setSaveMsg(''), 3000);
-    } catch (err) {
-      setSaveMsg('Failed to save preferences');
+      setLoading(true);
+      setError(null);
+      const { data, error: queryError } = await supabase
+        .from('user_preferences')
+        .select('*')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (queryError && queryError.code !== 'PGRST116') {
+        throw queryError;
+      }
+
+      if (data) {
+        setPreferences(prev => ({
+          ...prev,
+          preferred_makes: data.preferred_makes || [],
+          preferred_locations: data.preferred_locations || [],
+          preferred_models: data.preferred_models || [],
+          preferred_price_min: data.preferred_price_min || 5000,
+          preferred_price_max: data.preferred_price_max || 50000,
+          preferred_mileage_max: data.preferred_mileage_max || 150000,
+          year_min: data.year_min || 2010,
+          year_max: data.year_max || 2026,
+          condition: data.condition || 'Any',
+          body_types: data.body_types || [],
+          notify_enabled: data.notify_enabled || false,
+          total_likes: data.total_likes || 0,
+          total_skips: data.total_skips || 0,
+        }));
+      }
+    } catch (err: any) {
+      console.error('Error fetching preferences:', err);
+      setError(err?.message || 'Failed to load preferences');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const savePreferences = async () => {
+    if (!user) return;
+    setSaving(true);
+    setError(null);
+
+    try {
+      const { error: upsertError } = await supabase
+        .from('user_preferences')
+        .upsert(
+          {
+            user_id: user.id,
+            preferred_makes: preferences.preferred_makes,
+            preferred_locations: preferences.preferred_locations,
+            preferred_models: preferences.preferred_models,
+            preferred_price_min: preferences.preferred_price_min,
+            preferred_price_max: preferences.preferred_price_max,
+            preferred_mileage_max: preferences.preferred_mileage_max,
+            year_min: preferences.year_min,
+            year_max: preferences.year_max,
+            condition: preferences.condition,
+            body_types: preferences.body_types,
+            notify_enabled: preferences.notify_enabled,
+            total_likes: preferences.total_likes,
+            total_skips: preferences.total_skips,
+          },
+          { onConflict: 'user_id' }
+        );
+
+      if (upsertError) {
+        console.error('Upsert error:', upsertError);
+        // If the new columns don't exist yet, save what we can
+        const { error: fallbackError } = await supabase
+          .from('user_preferences')
+          .upsert(
+            {
+              user_id: user.id,
+              preferred_makes: preferences.preferred_makes,
+              preferred_locations: preferences.preferred_locations,
+              preferred_price_min: preferences.preferred_price_min,
+              preferred_price_max: preferences.preferred_price_max,
+              preferred_mileage_max: preferences.preferred_mileage_max,
+              total_likes: preferences.total_likes,
+              total_skips: preferences.total_skips,
+            },
+            { onConflict: 'user_id' }
+          );
+        if (fallbackError) throw fallbackError;
+      }
+    } catch (err: any) {
+      console.error('Error saving preferences:', err);
+      setError(err?.message || 'Failed to save preferences');
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) {
+  const addMake = () => {
+    if (newMake.trim() && !preferences.preferred_makes.includes(newMake.trim())) {
+      setPreferences(prev => ({
+        ...prev,
+        preferred_makes: [...prev.preferred_makes, newMake.trim()],
+      }));
+      setNewMake('');
+    }
+  };
+
+  const removeMake = (make: string) => {
+    setPreferences(prev => ({
+      ...prev,
+      preferred_makes: prev.preferred_makes.filter(m => m !== make),
+    }));
+  };
+
+  const addLocation = () => {
+    if (newLocation.trim() && !preferences.preferred_locations.includes(newLocation.trim())) {
+      setPreferences(prev => ({
+        ...prev,
+        preferred_locations: [...prev.preferred_locations, newLocation.trim()],
+      }));
+      setNewLocation('');
+    }
+  };
+
+  const removeLocation = (location: string) => {
+    setPreferences(prev => ({
+      ...prev,
+      preferred_locations: prev.preferred_locations.filter(l => l !== location),
+    }));
+  };
+
+  const addModel = () => {
+    if (newModel.trim() && !preferences.preferred_models.includes(newModel.trim())) {
+      setPreferences(prev => ({
+        ...prev,
+        preferred_models: [...prev.preferred_models, newModel.trim()],
+      }));
+      setNewModel('');
+    }
+  };
+
+  const removeModel = (model: string) => {
+    setPreferences(prev => ({
+      ...prev,
+      preferred_models: prev.preferred_models.filter(m => m !== model),
+    }));
+  };
+
+  const toggleBodyType = (bodyType: string) => {
+    setPreferences(prev => ({
+      ...prev,
+      body_types: prev.body_types.includes(bodyType)
+        ? prev.body_types.filter(bt => bt !== bodyType)
+        : [...prev.body_types, bodyType],
+    }));
+  };
+
+  if (authLoading || loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+        <div className="text-gray-400">Loading preferences...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+        <div className=" => l !== location),
+    }));
+  };
+
+  const addModel = () => {
+    if (newModel.trim() && !preferences.preferred_models.includes(newModel.trim())) {
+      setPreferences(prev => ({
+        ...prev,
+        preferred_models: [...prev.preferred_models, newModel.trim()],
+      }));
+      setNewModel('');
+    }
+  };
+
+  const removeModel = (model: string) => {
+    setPreferences(prev => ({
+      ...prev,
+      preferred_models: prev.preferred_models.filter(m => m !== model),
+    }));
+  };
+
+  const toggleBodyType = (bodyType: string) => {
+    setPreferences(prev => ({
+      ...prev,
+      body_types: prev.body_types.includes(bodyType)
+        ? prev.body_types.filter(bt => bt !== bodyType)
+        : [...prev.body_types, bodyType],
+    }));
+  };
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+        <div className="text-gray-400">Loading preferences...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-300 mb-2">Sign in required</h2>
+          <p className="text-gray-500">Please sign in to view your preferences.</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center gap-3 mb-8">
-        <Settings className="w-8 h-8 text-blue-500" />
-        <h1 className="text-3xl font-bold text-white">AI Preferences</h1>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      {/* Header */}
+      <div className="relative py-12 px-4 sm:px-6 lg:px-8 border-b border-slate-800/50">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+            Your Preferences
+          </h1>
+          <p className="text-lg text-gray-400">Customize your deal feed and get notified about matches</p>
+        </div>
       </div>
-
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mb-6 text-red-400">{error}</div>
-      )}
 
       {/* Stats Row */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <Heart className="w-5 h-5 text-green-500" />
-            <h3 className="text-lg font-semibold text-white">Total Likes</h3>
+      <div className="border-b border-slate-800/50 bg-slate-900/30">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-slate-800/30 border border-slate-700/30 rounded-lg p-4">
+              <p className="text-gray-500 text-sm mb-1">Total Likes</p>
+              <p className="text-2xl font-bold text-emerald-400 flex items-center gap-2">
+                <Heart className="w-5 h-5" />
+                {preferences.total_likes}
+              </p>
+            </div>
+            <div className="bg-slate-800/30 border border-slate-700/30 rounded-lg p-4">
+              <p className="text-gray-500 text-sm mb-1">Total Skips</p>
+              <p className="text-2xl font-bold text-orange-400">{preferences.total_skips}</p>
+            </div>
+            <div className="bg-slate-800/30 border border-slate-700/30 rounded-lg p-4">
+              <p className="text-gray-500 text-sm mb-1">Preferred Makes</p>
+              <p className="text-2xl font-bold text-blue-400">{preferences.preferred_makes.length}</p>
+            </div>
+            <div className="bg-slate-800/30 border border-slate-700/30 rounded-lg p-4">
+              <p className="text-gray-500 text-sm mb-1">Preferred Locations</p>
+              <p className="text-2xl font-bold text-purple-400">{preferences.preferred_locations.length}</p>
+            </div>
           </div>
-          <p className="text-3xl font-bold text-green-400">{preferences?.total_likes || 0}</p>
-        </div>
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <X className="w-5 h-5 text-red-500" />
-            <h3 className="text-lg font-semibold text-white">Total Skips</h3>
-          </div>
-          <p className="text-3xl font-bold text-red-400">{preferences?.total_skips || 0}</p>
         </div>
       </div>
 
-      {/* Editable Preferences */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
-        <h2 className="text-xl font-semibold text-white mb-2">Your Preferences</h2>
-        <p className="text-gray-400 mb-6">Edit your preferences below. These are also learned from your likes and skips.</p>
-
-        {/* Preferred Makes */}
-        <div className="mb-5">
-          <div className="flex items-center gap-2 mb-2">
-            <Car className="w-5 h-5 text-blue-500" />
-            <h3 className="font-medium text-white">Preferred Makes</h3>
+      {/* Content */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {error && (
+          <div className="mb-6 p-4 bg-red-900/30 border border-red-500/50 rounded-lg text-red-300">
+            {error}
           </div>
-          <button
-            onClick={() => setMakesOpen(!makesOpen)}
-            className="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 text-left mb-1"
-          >
-            {editMakes.length === 0 ? 'Select makes...' : editMakes.join(', ')}
-          </button>
-          {makesOpen && (
-            <div className="max-h-48 overflow-y-auto bg-gray-700 rounded border border-gray-600 p-2 grid grid-cols-2 gap-1">
-              {CAR_MAKES.map((make) => (
-                <label key={make} className="flex items-center gap-2 cursor-pointer px-2 py-1 hover:bg-gray-600 rounded">
-                  <input
-                    type="checkbox"
-                    checked={editMakes.includes(make)}
-                    onChange={() => handleMakeToggle(make)}
-                    className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-blue-500"
-                  />
-                  <span className="text-sm text-gray-300">{make}</span>
-                </label>
+        )}
+
+        <div className="space-y-6">
+          {/* Preferred Makes */}
+          <div className="bg-gradient-to-br from-slate-800/30 to-slate-900/30 border border-slate-700/30 rounded-2xl p-6">
+            <h2 className="text-xl font-bold text-white mb-4">Preferred Car Brands</h2>
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                value={newMake}
+                onChange={e => setNewMake(e.target.value)}
+                onKeyPress={e => e.key === 'Enter' && addMake()}
+                placeholder="e.g., Toyota"
+                className="flex-1 px-4 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+              />
+              <button
+                onClick={addMake}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" /> Add
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {preferences.preferred_makes.map(make => (
+                <span
+                  key={make}
+                  className="bg-blue-500/20 border border-blue-500/50 text-blue-300 px-3 py-1 rounded-full text-sm flex items-center gap-2"
+                >
+                  {make}
+                  <button
+                    onClick={() => removeMake(make)}
+                    className="ml-1 hover:text-blue-200"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
               ))}
             </div>
-          )}
-        </div>
+          </div>
 
-        {/* Preferred Locations */}
-        <div className="mb-5">
-          <div className="flex items-center gap-2 mb-2">
-            <MapPin className="w-5 h-5 text-purple-500" />
-            <h3 className="font-medium text-white">Preferred Locations</h3>
+          {/* Preferred Locations */}
+          <div className="bg-gradient-to-br from-slate-800/30 to-slate-900/30 border border-slate-700/30 rounded-2xl p-6">
+            <h2 className="text-xl font-bold text-white mb-4">Preferred Locations</h2>
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                value={newLocation}
+                onChange={e => setNewLocation(e.target.value)}
+                onKeyPress={e => e.key === 'Enter' && addLocation()}
+                placeholder="e.g., Los Angeles"
+                className="flex-1 px-4 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+              />
+              <button
+                onClick={addLocation}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" /> Add
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {preferences.preferred_locations.map(location => (
+                <span
+                  key={location}
+                  className="bg-purple-500/20 border border-purple-500/50 text-purple-300 px-3 py-1 rounded-full text-sm flex items-center gap-2"
+                >
+                  {location}
+                  <button
+                    onClick={() => removeLocation(location)}
+                    className="ml-1 hover:text-purple-200"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
           </div>
-          <div className="flex gap-2 mb-2">
-            <input
-              type="text"
-              value={newLocation}
-              onChange={(e) => setNewLocation(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddLocation()}
-              placeholder="Add a location..."
-              className="flex-1 bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
-            />
-            <button
-              onClick={handleAddLocation}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded transition-colors"
-            >
-              Add
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {editLocations.map((loc) => (
-              <span key={loc} className="bg-purple-500/20 text-purple-400 px-3 py-1 rounded-full text-sm flex items-center gap-1">
-                {loc}
-                <button onClick={() => handleRemoveLocation(loc)} className="hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            ))}
-            {editLocations.length === 0 && (
-              <span className="text-gray-500 text-sm">No locations added yet</span>
-            )}
-          </div>
-        </div>
 
-        {/* Price Range */}
-        <div className="mb-5">
-          <div className="flex items-center gap-2 mb-2">
-            <DollarSign className="w-5 h-5 text-green-500" />
-            <h3 className="font-medium text-white">Price Range</h3>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <input
-              type="number"
-              value={editPriceMin}
-              onChange={(e) => setEditPriceMin(e.target.value)}
-              placeholder="Min price"
-              className="bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
-            />
-            <input
-              type="number"
-              value={editPriceMax}
-              onChange={(e) => setEditPriceMax(e.target.value)}
-              placeholder="Max price"
-              className="bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-        </div>
-
-        {/* Max Mileage */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-2">
-            <Gauge className="w-5 h-5 text-yellow-500" />
-            <h3 className="font-medium text-white">Max Mileage</h3>
-          </div>
-          <input
-            type="number"
-            value={editMileage}
-            onChange={(e) => setEditMileage(e.target.value)}
-            placeholder="Max mileage"
-            className="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
-          />
-        </div>
-
-        {/* Save Button */}
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-        >
-          <Save className="w-5 h-5" />
-          {saving ? 'Saving...' : 'Save Preferences'}
-        </button>
-        {saveMsg && (
-          <p className={`text-center mt-2 text-sm ${saveMsg.includes('Failed') ? 'text-red-400' : 'text-green-400'}`}>
-            {saveMsg}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
+          {/* Preferred Models */}
+          <div className="bg-gradient-to-br from-slate-800/30 to-slate-900/30 border border-slate-700/30 rounded-2xl p-6">
+            <h2 className="text-xl font-bold text-white mb-4">Preferred Car Models</h2>
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                value={newModel}
+                onChange={e => setNewModel(e.target.value)}
+                onKeyPress={e => e.key === 'Enter' && addModel()}
+                placeholder="e.g., Camry"
+                className="flex-1 px-4 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+              />
+              <button
+                onClick={addModel}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" /> Add
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {preferences.preferred_models.map(model => (
+                <spanöâÐ¢Æ6VöÆFW#Ò&RærâÂÆ÷2ævVÆW2 ¢6Æ74æÖSÒ&fÆWÓÓBÓ"&r×6ÆFRÓóS&÷&FW"&÷&FW"×6ÆFRÓsóS&÷VæFVBÖÆrFWB×vFRÆ6VöÆFW"Öw&ÓSfö7W3¦÷WFÆæRÖæöæRfö7W3¦&÷&FW"Ö&ÇVRÓSóS ¢óà¢Æ'WGFöà¢öä6Æ6³×¶FDÆö6FöçÐ¢6Æ74æÖSÒ'ÓBÓ"&rÖ&ÇVRÓc÷fW#¦&rÖ&ÇVRÓSFWB×vFR&÷VæFVBÖÆrföçBÖÖVFVÒG&ç6FöâÖ6öÆ÷'2fÆWFV×2Ö6VçFW"vÓ" ¢à¢ÅÇW26Æ74æÖSÒ'rÓBÓB"óâF@¢Âö'WGFöãà¢ÂöFcà¢ÆFb6Æ74æÖSÒ&fÆWfÆW×w&vÓ"#à¢·&VfW&Væ6W2ç&VfW'&VEöÆö6Föç2æÖÆö6FöâÓâ¢Ç7à¢¶W×¶Æö6FöçÐ¢6Æ74æÖSÒ&&r×W'ÆRÓSó#&÷&FW"&÷&FW"×W'ÆRÓSóSFWB×W'ÆRÓ3Ó2Ó&÷VæFVBÖgVÆÂFWB×6ÒfÆWFV×2Ö6VçFW"vÓ" ¢à¢¶Æö6FöçÐ¢Æ'WGFöà¢öä6Æ6³×²Óâ&VÖ÷fTÆö6FöâÆö6FöâÐ¢6Æ74æÖSÒ&ÖÂÓ÷fW#§FWB×W'ÆRÓ# ¢à¢Å6Æ74æÖSÒ'rÓ2Ó2"óà¢Âö'WGFöãà¢Â÷7ãà¢Ð¢ÂöFcà¢ÂöFcà ¢²ò¢&VfW'&VBÖöFVÇ2¢÷Ð¢ÆFb6Æ74æÖSÒ&&rÖw&FVçB×FòÖ'"g&öÒ×6ÆFRÓó3Fò×6ÆFRÓó3&÷&FW"&÷&FW"×6ÆFRÓsó3&÷VæFVBÓ'ÂÓb#à¢Æ"6Æ74æÖSÒ'FWB×ÂföçBÖ&öÆBFWB×vFRÖ"ÓB#å&VfW'&VB6"ÖöFVÇ3Âö#à¢ÆFb6Æ74æÖSÒ&fÆWvÓ"Ö"ÓB#à¢ÆçW@¢GSÒ'FWB ¢fÇVS×¶æWtÖöFVÇÐ¢öä6ævS×¶RÓâ6WDæWtÖöFVÂRçF&vWBçfÇVRÐ¢öä¶W&W73×¶RÓâRæ¶WÓÓÒtVçFW"rbbFDÖöFVÂÐ¢Æ6VöÆFW#Ò&RærâÂ6×' ¢6Æ74æÖSÒ&fÆWÓÓBÓ"&r×6ÆFRÓóS&÷&FW"&÷&FW"×6ÆFRÓsóS&÷VæFVBÖÆrFWB×vFRÆ6VöÆFW"Öw&ÓSfö7W3¦÷WFÆæRÖæöæRfö7W3¦&÷&FW"Ö&ÇVRÓSóS ¢óà¢Æ'WGFöà¢öä6Æ6³×¶FDÖöFVÇÐ¢6Æ74æÖSÒ'ÓBÓ"&rÖ&ÇVRÓc÷fW#¦&rÖ&ÇVRÓSFWB×vFR&÷VæFVBÖÆrföçBÖÖVFVÒG&ç6FöâÖ6öÆ÷'2fÆWFV×2Ö6VçFW"vÓ" ¢à¢ÅÇW26Æ74æÖSÒ'rÓBÓB"óâF@¢Âö'WGFöãà¢ÂöFcà¢ÆFb6Æ74æÖSÒ&fÆWfÆW×w&vÓ"#à¢·&VfW&Væ6W2ç&VfW'&VEöÖöFVÇ2æÖÖöFVÂÓâ¢Ç7à¢¶W×¶ÖöFVÇÐ¢6Æ74æÖSÒ&&rÖ7âÓSó#&÷&FW"&÷&FW"Ö7âÓSóSFWBÖ7âÓ3Ó2Ó&÷VæFVBÖgVÆÂFWB×6ÒfÆWFV×2Ö6VçFW"vÓ" ¢à¢¶ÖöFVÇÐ¢Æ'WGFöà¢öä6Æ6³×²Óâ&VÖ÷fTÖöFVÂÖöFVÂÐ¢6Æ74æÖSÒ&ÖÂÓ÷fW#§FWBÖ7âÓ# ¢à¢Å6Æ74æÖSÒ'rÓ2Ó2"óà¢Âö'WGFöãà¢Â÷7ãà¢Ð¢ÂöFcà¢ÂöFcà ¢²ò¢&6R&ævR¢÷Ð¢ÆFb6Æ74æÖSÒ&&rÖw&FVçB×FòÖ'"g&öÒ×6ÆFRÓó3Fò×6ÆFRÓó3&÷&FW"&÷&FW"×6ÆFRÓsó3&÷VæFVBÓ'ÂÓb#à¢Æ"6Æ74æÖSÒ'FWB×ÂföçBÖ&öÆBFWB×vFRÖ"ÓB#å&6R&ævSÂö#à¢ÆFb6Æ74æÖSÒ&w&Bw&BÖ6öÇ2Ó"vÓB#à¢ÆFcà¢ÆÆ&VÂ6Æ74æÖSÒ&&Æö6²FWB×6ÒFWBÖw&ÓCÖ"Ó"#äÖâ&6SÂöÆ&VÃà¢ÆçW@¢GSÒ&çVÖ&W" ¢fÇVS×·&VfW&Væ6W2ç&VfW'&VE÷&6UöÖçÐ¢öä6ævS×¶RÓà¢6WE&VfW&Væ6W2&WbÓâ°¢ââç&WbÀ¢&VfW'&VE÷&6UöÖã¢'6TçBRçF&vWBçfÇVRÇÂÀ¢Ò¢Ð¢6Æ74æÖSÒ'rÖgVÆÂÓBÓ"&r×6ÆFRÓóS&÷&FW"&÷&FW"×6ÆFRÓsóS&÷VæFVBÖÆrFWB×vFRfö7W3¦÷WFÆæRÖæöæRfö7W3¦&÷&FW"Ö&ÇVRÓSóS ¢óà¢ÂöFcà¢ÆFcà¢ÆÆ&VÂ6Æ74æÖSÒ&&Æö6²FWB×6ÒFWBÖw&ÓCÖ"Ó"#äÖ&6SÂöÆ&VÃà¢ÆçW@¢GSÒ&çVÖ&W" ¢fÇVS×·&VfW&Væ6W2ç&VfW'&VE÷&6UöÖÐ¢öä6ævS×¶RÓà¢6WE&VfW&Væ6W2&WbÓâ°¢ââç&WbÀ¢&VfW'&VE÷&6UöÖ¢'6TçBRçF&vWBçfÇVRÇÂÀ¢Ò¢Ð¢6Æ74æÖSÒ'rÖgVÆÂÓBÓ"&r×6ÆFRÓóS&÷&FW"&÷&FW"×6ÆFRÓsóS&÷VæFVBÖÆrFWB×vFRfö7W3¦÷WFÆæRÖæöæRfö7W3¦&÷&FW"Ö&ÇVRÓSóS ¢óà¢ÂöFcà¢ÂöFcà¢ÂöFcà ¢²ò¢ÖÆVvR¢÷Ð¢ÆFb6Æ74æÖSÒ&&rÖw&FVçB×FòÖ'"g&öÒ×6ÆFRÓó3Fò×6ÆFRÓó3&÷&FW"&÷&FW"×6ÆFRÓsó3&÷VæFVBÓ'ÂÓb#à¢Æ"6Æ74æÖSÒ'FWB×ÂföçBÖ&öÆBFWB×vFRÖ"ÓB#äÖ×VÒÖÆVvSÂö#à¢ÆçW@¢GSÒ&çVÖ&W" ¢fÇVS×·&VfW&Væ6W2ç&VfW'&VEöÖÆVvUöÖÐ¢öä6ævS×¶RÓà¢6WE&VfW&Væ6W2&WbÓâ°¢ââç&WbÀ¢&VfW'&VEöÖÆVvUöÖ¢'6TçBRçF&vWBçfÇVRÇÂÀ¢Ò¢Ð¢6Æ74æÖSÒ'rÖgVÆÂÓBÓ"&r×6ÆFRÓóS&÷&FW"&÷&FW"×6ÆFRÓsóS&÷VæFVBÖÆrFWB×vFRfö7W3¦÷WFÆæRÖæöæRfö7W3¦&÷&FW"Ö&ÇVRÓSóS ¢óà¢ÂöFcà ¢²ò¢V"&ævR¢÷Ð¢ÆFb6Æ74æÖSÒ&&rÖw&FVçB×FòÖ'"g&öÒ×6ÆFRÓó3Fò×6ÆFRÓó3&÷&FW"&÷&FW"×6ÆFRÓsó3&÷VæFVBÓ'ÂÓb#à¢Æ"6Æ74æÖSÒ'FWB×ÂföçBÖ&öÆBFWB×vFRÖ"ÓB#åV"&ævSÂö#à¢ÆFb6Æ74æÖSÒ&w&Bw&BÖ6öÇ2Ó"vÓB#à¢ÆFcà¢ÆÆ&VÂ6Æ74æÖSÒ&&Æö6²FWB×6ÒFWBÖw&ÓCÖ"Ó"#äÖâV#ÂöÆ&VÃà¢ÆçW@¢GSÒ&çVÖ&W" ¢ÖãÒ# ¢ÖÒ###b ¢fÇVS×·&VfW&Væ6W2çV%öÖçÐ¢öä6ævS×¶RÓà¢6WE&VfW&Væ6W2&WbÓâ°¢ââç&WbÀ¢V%öÖã¢'6TçBRçF&vWBçfÇVRÇÂ#À¢Ò¢Ð¢6Æ74æÖSÒ'rÖgVÆÂÓBÓ"&r×6ÆFRÓóS&÷&FW"&÷&FW"×6ÆFRÓsóS&÷VæFVBÖÆrFWB×vFRfö7W3¦÷WFÆæRÖæöæRfö7W3¦&÷&FW"Ö&ÇVRÓSóS ¢óà¢ÂöFcà¢ÆFcà¢ÆÆ&VÂ6Æ74æÖSÒ&&Æö6²FWB×6ÒFWBÖw&ÓCÖ"Ó"#äÖV#ÂöÆ&VÃà¢ÆçW@¢GSÒ&çVÖ&W" ¢ÖãÒ# ¢ÖÒ###b ¢fÇVS×·&VfW&Væ6W2çV%öÖÐ¢öä6ævS×¶RÓà¢6WE&VfW&Væ6W2&WbÓâ°¢ââç&WbÀ¢V%öÖ¢'6TçBRçF&vWBçfÇVRÇÂ##bÀ¢Ò¢Ð¢6Æ74æÖSÒ'rÖgVÆÂÓBÓ"&r×6ÆFRÓóS&÷&FW"&÷&FW"×6ÆFRÓsóS&÷VæFVBÖÆrFWB×vFRfö7W3¦÷WFÆæRÖæöæRfö7W3¦&÷&FW"Ö&ÇVRÓSóS ¢óà¢ÂöFcà¢ÂöFcà¢ÂöFcà ¢²ò¢6öæFFöâ¢÷Ð¢ÆFb6Æ74æÖSÒ&&rÖw&FVçB×FòÖ'"g&öÒ×6ÆFRÓó3Fò×6ÆFRÓó3&÷&FW"&÷&FW"×6ÆFRÓsó3&÷VæFVBÓ'ÂÓb#à¢Æ"6Æ74æÖSÒ'FWB×ÂföçBÖ&öÆBFWB×vFRÖ"ÓB#ä6öæFFöâ&VfW&Væ6SÂö#à¢ÆFb6Æ74æÖSÒ&fÆWvÓ2#à¢´4ôäDDôåôõDôå2æÖ6öæFFöâÓâ¢ÆÆ&VÂ¶W×¶6öæFFöçÒ6Æ74æÖSÒ&fÆWFV×2Ö6VçFW"vÓ"7W'6÷"×öçFW"#à¢ÆçW@¢GSÒ'&Fò ¢æÖSÒ&6öæFFöâ ¢fÇVS×¶6öæFFöçÐ¢6V6¶VC×·&VfW&Væ6W2æ6öæFFöâÓÓÒ6öæFFöçÐ¢öä6ævS×¶RÓà¢6WE&VfW&Væ6W2&WbÓâ°¢ââç&WbÀ¢6öæFFöã¢RçF&vWBçfÇVR2tæWrrÂuW6VBrÂtçrÀ¢Ò¢Ð¢6Æ74æÖSÒ'rÓBÓB66VçBÖ&ÇVRÓS ¢óà¢Ç7â6Æ74æÖSÒ'FWBÖw&Ó3#ç¶6öæFFöçÓÂ÷7ãà¢ÂöÆ&VÃà¢Ð¢ÂöFcà¢ÂöFcà ¢²ò¢&öGGW2¢÷Ð¢ÆFb6Æ74æÖSÒ&&rÖw&FVçB×FòÖ'"g&öÒ×6ÆFRÓó3Fò×6ÆFRÓó3&÷&FW"&÷&FW"×6ÆFRÓsó3&÷VæFVBÓ'ÂÓb#à¢Æ"6Æ74æÖSÒ'FWB×ÂföçBÖ&öÆBFWB×vFRÖ"ÓB#ä&öGGR&VfW&Væ6SÂö#à¢ÆFb6Æ74æÖSÒ&w&Bw&BÖ6öÇ2Ó"ÖC¦w&BÖ6öÇ2ÓBvÓ2#à¢´$ôEõEUôõDôå2æÖ&öGGRÓâ¢ÆÆ&VÂ¶W×¶&öGGWÒ6Æ74æÖSÒ&fÆWFV×2Ö6VçFW"vÓ"7W'6÷"×öçFW"#à¢ÆçW@¢GSÒ&6V6¶&÷ ¢6V6¶VC×·&VfW&Væ6W2æ&öG÷GW2ææ6ÇVFW2&öGGRÐ¢öä6ævS×²ÓâFövvÆT&öGGR&öGGRÐ¢6Æ74æÖSÒ'rÓBÓB66VçBÖ&ÇVRÓS ¢óà¢Ç7â6Æ74æÖSÒ'FWBÖw&Ó3#ç¶&öGGWÓÂ÷7ãà¢ÂöÆ&VÃà¢Ð¢ÂöFcà¢ÂöFcà ¢²ò¢æ÷Ff6Föç2¢÷Ð¢ÆFb6Æ74æÖSÒ&&rÖw&FVçB×FòÖ'"g&öÒ×6ÆFRÓó3Fò×6ÆFRÓó3&÷&FW"&÷&FW"×6ÆFRÓsó3&÷VæFVBÓ'ÂÓb#à¢ÆFb6Æ74æÖSÒ&fÆWFV×2Ö6VçFW"§W7FgÖ&WGvVVâ#à¢ÆFb6Æ74æÖSÒ&fÆWFV×2Ö6VçFW"vÓ2#à¢Å¦6Æ74æÖSÒ'rÓRÓRFWB×VÆÆ÷rÓC"óà¢ÆFcà¢Æ"6Æ74æÖSÒ'FWB×ÂföçBÖ&öÆBFWB×vFR#äæ÷Ff6Föç3Âö#à¢Ç6Æ74æÖSÒ'FWB×6ÒFWBÖw&ÓC#ävWBæ÷FfVB&÷WBÖF6ærFVÇ3Â÷à¢ÂöFcà¢ÂöFcà¢ÆÆ&VÂ6Æ74æÖSÒ&fÆWFV×2Ö6VçFW"7W'6÷"×öçFW"#à¢ÆçW@¢GSÒ&6V6¶&÷ ¢6V6¶VC×·&VfW&Væ6W2ææ÷FgöVæ&ÆVGÐ¢öä6ævS×¶RÓà¢6WE&VfW&Væ6W2&WbÓâ°¢ââç&WbÀ¢æ÷FgöVæ&ÆVC¢RçF&vWBæ6V6¶VBÀ¢Ò¢Ð¢6Æ74æÖSÒ'rÓRÓR66VçBÖ&ÇVRÓS ¢óà¢ÂöÆ&VÃà¢ÂöFcà¢ÂöFcà ¢²ò¢6fR'WGFöâ¢÷Ð¢ÆFb6Æ74æÖSÒ&fÆWvÓ2#à¢Æ'WGFöà¢öä6Æ6³×·6fU&VfW&Væ6W7Ð¢F6&ÆVC×·6fæwÐ¢6Æ74æÖSÒ&fÆWÓÓbÓ2&rÖw&FVçB×Fò×"g&öÒÖ&ÇVRÓcFò×W'ÆRÓc÷fW#¦g&öÒÖ&ÇVRÓS÷fW#§Fò×W'ÆRÓSF6&ÆVC¦g&öÒÖw&ÓcF6&ÆVC§FòÖw&ÓsF6&ÆVC¦7W'6÷"Öæ÷BÖÆÆ÷vVBFWB×vFRföçB×6VÖ&öÆB&÷VæFVBÖÆrG&ç6FöâÖÆÂGW&FöâÓ# ¢à¢·6færòu6færâââr¢u6fR&VfW&Væ6W2wÐ¢Âö'WGFöãà¢ÂöFcà¢ÂöFcà¢ÂöFcà¢ÂöFcà¢°§Ð
