@@ -220,47 +220,6 @@ export function PreferencesPage() {
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
-        <div className=" => l !== location),
-    }));
-  };
-
-  const addModel = () => {
-    if (newModel.trim() && !preferences.preferred_models.includes(newModel.trim())) {
-      setPreferences(prev => ({
-        ...prev,
-        preferred_models: [...prev.preferred_models, newModel.trim()],
-      }));
-      setNewModel('');
-    }
-  };
-
-  const removeModel = (model: string) => {
-    setPreferences(prev => ({
-      ...prev,
-      preferred_models: prev.preferred_models.filter(m => m !== model),
-    }));
-  };
-
-  const toggleBodyType = (bodyType: string) => {
-    setPreferences(prev => ({
-      ...prev,
-      body_types: prev.body_types.includes(bodyType)
-        ? prev.body_types.filter(bt => bt !== bodyType)
-        : [...prev.body_types, bodyType],
-    }));
-  };
-
-  if (authLoading || loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
-        <div className="text-gray-400">Loading preferences...</div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-300 mb-2">Sign in required</h2>
           <p className="text-gray-500">Please sign in to view your preferences.</p>
@@ -412,4 +371,194 @@ export function PreferencesPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               {preferences.preferred_models.map(model => (
-                <spanöâÐ¢Æ6VöÆFW#Ò&RærâÂÆ÷2ævVÆW2 ¢6Æ74æÖSÒ&fÆWÓÓBÓ"&r×6ÆFRÓóS&÷&FW"&÷&FW"×6ÆFRÓsóS&÷VæFVBÖÆrFWB×vFRÆ6VöÆFW"Öw&ÓSfö7W3¦÷WFÆæRÖæöæRfö7W3¦&÷&FW"Ö&ÇVRÓSóS ¢óà¢Æ'WGFöà¢öä6Æ6³×¶FDÆö6FöçÐ¢6Æ74æÖSÒ'ÓBÓ"&rÖ&ÇVRÓc÷fW#¦&rÖ&ÇVRÓSFWB×vFR&÷VæFVBÖÆrföçBÖÖVFVÒG&ç6FöâÖ6öÆ÷'2fÆWFV×2Ö6VçFW"vÓ" ¢à¢ÅÇW26Æ74æÖSÒ'rÓBÓB"óâF@¢Âö'WGFöãà¢ÂöFcà¢ÆFb6Æ74æÖSÒ&fÆWfÆW×w&vÓ"#à¢·&VfW&Væ6W2ç&VfW'&VEöÆö6Föç2æÖÆö6FöâÓâ¢Ç7à¢¶W×¶Æö6FöçÐ¢6Æ74æÖSÒ&&r×W'ÆRÓSó#&÷&FW"&÷&FW"×W'ÆRÓSóSFWB×W'ÆRÓ3Ó2Ó&÷VæFVBÖgVÆÂFWB×6ÒfÆWFV×2Ö6VçFW"vÓ" ¢à¢¶Æö6FöçÐ¢Æ'WGFöà¢öä6Æ6³×²Óâ&VÖ÷fTÆö6FöâÆö6FöâÐ¢6Æ74æÖSÒ&ÖÂÓ÷fW#§FWB×W'ÆRÓ# ¢à¢Å6Æ74æÖSÒ'rÓ2Ó2"óà¢Âö'WGFöãà¢Â÷7ãà¢Ð¢ÂöFcà¢ÂöFcà ¢²ò¢&VfW'&VBÖöFVÇ2¢÷Ð¢ÆFb6Æ74æÖSÒ&&rÖw&FVçB×FòÖ'"g&öÒ×6ÆFRÓó3Fò×6ÆFRÓó3&÷&FW"&÷&FW"×6ÆFRÓsó3&÷VæFVBÓ'ÂÓb#à¢Æ"6Æ74æÖSÒ'FWB×ÂföçBÖ&öÆBFWB×vFRÖ"ÓB#å&VfW'&VB6"ÖöFVÇ3Âö#à¢ÆFb6Æ74æÖSÒ&fÆWvÓ"Ö"ÓB#à¢ÆçW@¢GSÒ'FWB ¢fÇVS×¶æWtÖöFVÇÐ¢öä6ævS×¶RÓâ6WDæWtÖöFVÂRçF&vWBçfÇVRÐ¢öä¶W&W73×¶RÓâRæ¶WÓÓÒtVçFW"rbbFDÖöFVÂÐ¢Æ6VöÆFW#Ò&RærâÂ6×' ¢6Æ74æÖSÒ&fÆWÓÓBÓ"&r×6ÆFRÓóS&÷&FW"&÷&FW"×6ÆFRÓsóS&÷VæFVBÖÆrFWB×vFRÆ6VöÆFW"Öw&ÓSfö7W3¦÷WFÆæRÖæöæRfö7W3¦&÷&FW"Ö&ÇVRÓSóS ¢óà¢Æ'WGFöà¢öä6Æ6³×¶FDÖöFVÇÐ¢6Æ74æÖSÒ'ÓBÓ"&rÖ&ÇVRÓc÷fW#¦&rÖ&ÇVRÓSFWB×vFR&÷VæFVBÖÆrföçBÖÖVFVÒG&ç6FöâÖ6öÆ÷'2fÆWFV×2Ö6VçFW"vÓ" ¢à¢ÅÇW26Æ74æÖSÒ'rÓBÓB"óâF@¢Âö'WGFöãà¢ÂöFcà¢ÆFb6Æ74æÖSÒ&fÆWfÆW×w&vÓ"#à¢·&VfW&Væ6W2ç&VfW'&VEöÖöFVÇ2æÖÖöFVÂÓâ¢Ç7à¢¶W×¶ÖöFVÇÐ¢6Æ74æÖSÒ&&rÖ7âÓSó#&÷&FW"&÷&FW"Ö7âÓSóSFWBÖ7âÓ3Ó2Ó&÷VæFVBÖgVÆÂFWB×6ÒfÆWFV×2Ö6VçFW"vÓ" ¢à¢¶ÖöFVÇÐ¢Æ'WGFöà¢öä6Æ6³×²Óâ&VÖ÷fTÖöFVÂÖöFVÂÐ¢6Æ74æÖSÒ&ÖÂÓ÷fW#§FWBÖ7âÓ# ¢à¢Å6Æ74æÖSÒ'rÓ2Ó2"óà¢Âö'WGFöãà¢Â÷7ãà¢Ð¢ÂöFcà¢ÂöFcà ¢²ò¢&6R&ævR¢÷Ð¢ÆFb6Æ74æÖSÒ&&rÖw&FVçB×FòÖ'"g&öÒ×6ÆFRÓó3Fò×6ÆFRÓó3&÷&FW"&÷&FW"×6ÆFRÓsó3&÷VæFVBÓ'ÂÓb#à¢Æ"6Æ74æÖSÒ'FWB×ÂföçBÖ&öÆBFWB×vFRÖ"ÓB#å&6R&ævSÂö#à¢ÆFb6Æ74æÖSÒ&w&Bw&BÖ6öÇ2Ó"vÓB#à¢ÆFcà¢ÆÆ&VÂ6Æ74æÖSÒ&&Æö6²FWB×6ÒFWBÖw&ÓCÖ"Ó"#äÖâ&6SÂöÆ&VÃà¢ÆçW@¢GSÒ&çVÖ&W" ¢fÇVS×·&VfW&Væ6W2ç&VfW'&VE÷&6UöÖçÐ¢öä6ævS×¶RÓà¢6WE&VfW&Væ6W2&WbÓâ°¢ââç&WbÀ¢&VfW'&VE÷&6UöÖã¢'6TçBRçF&vWBçfÇVRÇÂÀ¢Ò¢Ð¢6Æ74æÖSÒ'rÖgVÆÂÓBÓ"&r×6ÆFRÓóS&÷&FW"&÷&FW"×6ÆFRÓsóS&÷VæFVBÖÆrFWB×vFRfö7W3¦÷WFÆæRÖæöæRfö7W3¦&÷&FW"Ö&ÇVRÓSóS ¢óà¢ÂöFcà¢ÆFcà¢ÆÆ&VÂ6Æ74æÖSÒ&&Æö6²FWB×6ÒFWBÖw&ÓCÖ"Ó"#äÖ&6SÂöÆ&VÃà¢ÆçW@¢GSÒ&çVÖ&W" ¢fÇVS×·&VfW&Væ6W2ç&VfW'&VE÷&6UöÖÐ¢öä6ævS×¶RÓà¢6WE&VfW&Væ6W2&WbÓâ°¢ââç&WbÀ¢&VfW'&VE÷&6UöÖ¢'6TçBRçF&vWBçfÇVRÇÂÀ¢Ò¢Ð¢6Æ74æÖSÒ'rÖgVÆÂÓBÓ"&r×6ÆFRÓóS&÷&FW"&÷&FW"×6ÆFRÓsóS&÷VæFVBÖÆrFWB×vFRfö7W3¦÷WFÆæRÖæöæRfö7W3¦&÷&FW"Ö&ÇVRÓSóS ¢óà¢ÂöFcà¢ÂöFcà¢ÂöFcà ¢²ò¢ÖÆVvR¢÷Ð¢ÆFb6Æ74æÖSÒ&&rÖw&FVçB×FòÖ'"g&öÒ×6ÆFRÓó3Fò×6ÆFRÓó3&÷&FW"&÷&FW"×6ÆFRÓsó3&÷VæFVBÓ'ÂÓb#à¢Æ"6Æ74æÖSÒ'FWB×ÂföçBÖ&öÆBFWB×vFRÖ"ÓB#äÖ×VÒÖÆVvSÂö#à¢ÆçW@¢GSÒ&çVÖ&W" ¢fÇVS×·&VfW&Væ6W2ç&VfW'&VEöÖÆVvUöÖÐ¢öä6ævS×¶RÓà¢6WE&VfW&Væ6W2&WbÓâ°¢ââç&WbÀ¢&VfW'&VEöÖÆVvUöÖ¢'6TçBRçF&vWBçfÇVRÇÂÀ¢Ò¢Ð¢6Æ74æÖSÒ'rÖgVÆÂÓBÓ"&r×6ÆFRÓóS&÷&FW"&÷&FW"×6ÆFRÓsóS&÷VæFVBÖÆrFWB×vFRfö7W3¦÷WFÆæRÖæöæRfö7W3¦&÷&FW"Ö&ÇVRÓSóS ¢óà¢ÂöFcà ¢²ò¢V"&ævR¢÷Ð¢ÆFb6Æ74æÖSÒ&&rÖw&FVçB×FòÖ'"g&öÒ×6ÆFRÓó3Fò×6ÆFRÓó3&÷&FW"&÷&FW"×6ÆFRÓsó3&÷VæFVBÓ'ÂÓb#à¢Æ"6Æ74æÖSÒ'FWB×ÂföçBÖ&öÆBFWB×vFRÖ"ÓB#åV"&ævSÂö#à¢ÆFb6Æ74æÖSÒ&w&Bw&BÖ6öÇ2Ó"vÓB#à¢ÆFcà¢ÆÆ&VÂ6Æ74æÖSÒ&&Æö6²FWB×6ÒFWBÖw&ÓCÖ"Ó"#äÖâV#ÂöÆ&VÃà¢ÆçW@¢GSÒ&çVÖ&W" ¢ÖãÒ# ¢ÖÒ###b ¢fÇVS×·&VfW&Væ6W2çV%öÖçÐ¢öä6ævS×¶RÓà¢6WE&VfW&Væ6W2&WbÓâ°¢ââç&WbÀ¢V%öÖã¢'6TçBRçF&vWBçfÇVRÇÂ#À¢Ò¢Ð¢6Æ74æÖSÒ'rÖgVÆÂÓBÓ"&r×6ÆFRÓóS&÷&FW"&÷&FW"×6ÆFRÓsóS&÷VæFVBÖÆrFWB×vFRfö7W3¦÷WFÆæRÖæöæRfö7W3¦&÷&FW"Ö&ÇVRÓSóS ¢óà¢ÂöFcà¢ÆFcà¢ÆÆ&VÂ6Æ74æÖSÒ&&Æö6²FWB×6ÒFWBÖw&ÓCÖ"Ó"#äÖV#ÂöÆ&VÃà¢ÆçW@¢GSÒ&çVÖ&W" ¢ÖãÒ# ¢ÖÒ###b ¢fÇVS×·&VfW&Væ6W2çV%öÖÐ¢öä6ævS×¶RÓà¢6WE&VfW&Væ6W2&WbÓâ°¢ââç&WbÀ¢V%öÖ¢'6TçBRçF&vWBçfÇVRÇÂ##bÀ¢Ò¢Ð¢6Æ74æÖSÒ'rÖgVÆÂÓBÓ"&r×6ÆFRÓóS&÷&FW"&÷&FW"×6ÆFRÓsóS&÷VæFVBÖÆrFWB×vFRfö7W3¦÷WFÆæRÖæöæRfö7W3¦&÷&FW"Ö&ÇVRÓSóS ¢óà¢ÂöFcà¢ÂöFcà¢ÂöFcà ¢²ò¢6öæFFöâ¢÷Ð¢ÆFb6Æ74æÖSÒ&&rÖw&FVçB×FòÖ'"g&öÒ×6ÆFRÓó3Fò×6ÆFRÓó3&÷&FW"&÷&FW"×6ÆFRÓsó3&÷VæFVBÓ'ÂÓb#à¢Æ"6Æ74æÖSÒ'FWB×ÂföçBÖ&öÆBFWB×vFRÖ"ÓB#ä6öæFFöâ&VfW&Væ6SÂö#à¢ÆFb6Æ74æÖSÒ&fÆWvÓ2#à¢´4ôäDDôåôõDôå2æÖ6öæFFöâÓâ¢ÆÆ&VÂ¶W×¶6öæFFöçÒ6Æ74æÖSÒ&fÆWFV×2Ö6VçFW"vÓ"7W'6÷"×öçFW"#à¢ÆçW@¢GSÒ'&Fò ¢æÖSÒ&6öæFFöâ ¢fÇVS×¶6öæFFöçÐ¢6V6¶VC×·&VfW&Væ6W2æ6öæFFöâÓÓÒ6öæFFöçÐ¢öä6ævS×¶RÓà¢6WE&VfW&Væ6W2&WbÓâ°¢ââç&WbÀ¢6öæFFöã¢RçF&vWBçfÇVR2tæWrrÂuW6VBrÂtçrÀ¢Ò¢Ð¢6Æ74æÖSÒ'rÓBÓB66VçBÖ&ÇVRÓS ¢óà¢Ç7â6Æ74æÖSÒ'FWBÖw&Ó3#ç¶6öæFFöçÓÂ÷7ãà¢ÂöÆ&VÃà¢Ð¢ÂöFcà¢ÂöFcà ¢²ò¢&öGGW2¢÷Ð¢ÆFb6Æ74æÖSÒ&&rÖw&FVçB×FòÖ'"g&öÒ×6ÆFRÓó3Fò×6ÆFRÓó3&÷&FW"&÷&FW"×6ÆFRÓsó3&÷VæFVBÓ'ÂÓb#à¢Æ"6Æ74æÖSÒ'FWB×ÂföçBÖ&öÆBFWB×vFRÖ"ÓB#ä&öGGR&VfW&Væ6SÂö#à¢ÆFb6Æ74æÖSÒ&w&Bw&BÖ6öÇ2Ó"ÖC¦w&BÖ6öÇ2ÓBvÓ2#à¢´$ôEõEUôõDôå2æÖ&öGGRÓâ¢ÆÆ&VÂ¶W×¶&öGGWÒ6Æ74æÖSÒ&fÆWFV×2Ö6VçFW"vÓ"7W'6÷"×öçFW"#à¢ÆçW@¢GSÒ&6V6¶&÷ ¢6V6¶VC×·&VfW&Væ6W2æ&öG÷GW2ææ6ÇVFW2&öGGRÐ¢öä6ævS×²ÓâFövvÆT&öGGR&öGGRÐ¢6Æ74æÖSÒ'rÓBÓB66VçBÖ&ÇVRÓS ¢óà¢Ç7â6Æ74æÖSÒ'FWBÖw&Ó3#ç¶&öGGWÓÂ÷7ãà¢ÂöÆ&VÃà¢Ð¢ÂöFcà¢ÂöFcà ¢²ò¢æ÷Ff6Föç2¢÷Ð¢ÆFb6Æ74æÖSÒ&&rÖw&FVçB×FòÖ'"g&öÒ×6ÆFRÓó3Fò×6ÆFRÓó3&÷&FW"&÷&FW"×6ÆFRÓsó3&÷VæFVBÓ'ÂÓb#à¢ÆFb6Æ74æÖSÒ&fÆWFV×2Ö6VçFW"§W7FgÖ&WGvVVâ#à¢ÆFb6Æ74æÖSÒ&fÆWFV×2Ö6VçFW"vÓ2#à¢Å¦6Æ74æÖSÒ'rÓRÓRFWB×VÆÆ÷rÓC"óà¢ÆFcà¢Æ"6Æ74æÖSÒ'FWB×ÂföçBÖ&öÆBFWB×vFR#äæ÷Ff6Föç3Âö#à¢Ç6Æ74æÖSÒ'FWB×6ÒFWBÖw&ÓC#ävWBæ÷FfVB&÷WBÖF6ærFVÇ3Â÷à¢ÂöFcà¢ÂöFcà¢ÆÆ&VÂ6Æ74æÖSÒ&fÆWFV×2Ö6VçFW"7W'6÷"×öçFW"#à¢ÆçW@¢GSÒ&6V6¶&÷ ¢6V6¶VC×·&VfW&Væ6W2ææ÷FgöVæ&ÆVGÐ¢öä6ævS×¶RÓà¢6WE&VfW&Væ6W2&WbÓâ°¢ââç&WbÀ¢æ÷FgöVæ&ÆVC¢RçF&vWBæ6V6¶VBÀ¢Ò¢Ð¢6Æ74æÖSÒ'rÓRÓR66VçBÖ&ÇVRÓS ¢óà¢ÂöÆ&VÃà¢ÂöFcà¢ÂöFcà ¢²ò¢6fR'WGFöâ¢÷Ð¢ÆFb6Æ74æÖSÒ&fÆWvÓ2#à¢Æ'WGFöà¢öä6Æ6³×·6fU&VfW&Væ6W7Ð¢F6&ÆVC×·6fæwÐ¢6Æ74æÖSÒ&fÆWÓÓbÓ2&rÖw&FVçB×Fò×"g&öÒÖ&ÇVRÓcFò×W'ÆRÓc÷fW#¦g&öÒÖ&ÇVRÓS÷fW#§Fò×W'ÆRÓSF6&ÆVC¦g&öÒÖw&ÓcF6&ÆVC§FòÖw&ÓsF6&ÆVC¦7W'6÷"Öæ÷BÖÆÆ÷vVBFWB×vFRföçB×6VÖ&öÆB&÷VæFVBÖÆrG&ç6FöâÖÆÂGW&FöâÓ# ¢à¢·6færòu6færâââr¢u6fR&VfW&Væ6W2wÐ¢Âö'WGFöãà¢ÂöFcà¢ÂöFcà¢ÂöFcà¢ÂöFcà¢°§Ð
+                <span
+                  key={model}
+                  className="bg-cyan-500/20 border border-cyan-500/50 text-cyan-300 px-3 py-1 rounded-full text-sm flex items-center gap-2"
+                >
+                  {model}
+                  <button
+                    onClick={() => removeModel(model)}
+                    className="ml-1 hover:text-cyan-200"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Price Range */}
+          <div className="bg-gradient-to-br from-slate-800/30 to-slate-900/30 border border-slate-700/30 rounded-2xl p-6">
+            <h2 className="text-xl font-bold text-white mb-4">Price Range</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Min Price</label>
+                <input
+                  type="number"
+                  value={preferences.preferred_price_min}
+                  onChange={e =>
+                    setPreferences(prev => ({
+                      ...prev,
+                      preferred_price_min: parseInt(e.target.value) || 0,
+                    }))
+                  }
+                  className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Max Price</label>
+                <input
+                  type="number"
+                  value={preferences.preferred_price_max}
+                  onChange={e =>
+                    setPreferences(prev => ({
+                      ...prev,
+                      preferred_price_max: parseInt(e.target.value) || 0,
+                    }))
+                  }
+                  className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Mileage */}
+          <div className="bg-gradient-to-br from-slate-800/30 to-slate-900/30 border border-slate-700/30 rounded-2xl p-6">
+            <h2 className="text-xl font-bold text-white mb-4">Maximum Mileage</h2>
+            <input
+              type="number"
+              value={preferences.preferred_mileage_max}
+              onChange={e =>
+                setPreferences(prev => ({
+                  ...prev,
+                  preferred_mileage_max: parseInt(e.target.value) || 0,
+                }))
+              }
+              className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50"
+            />
+          </div>
+
+          {/* Year Range */}
+          <div className="bg-gradient-to-br from-slate-800/30 to-slate-900/30 border border-slate-700/30 rounded-2xl p-6">
+            <h2 className="text-xl font-bold text-white mb-4">Year Range</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Min Year</label>
+                <input
+                  type="number"
+                  min="1990"
+                  max="2026"
+                  value={preferences.year_min}
+                  onChange={e =>
+                    setPreferences(prev => ({
+                      ...prev,
+                      year_min: parseInt(e.target.value) || 2010,
+                    }))
+                  }
+                  className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Max Year</label>
+                <input
+                  type="number"
+                  min="1990"
+                  max="2026"
+                  value={preferences.year_max}
+                  onChange={e =>
+                    setPreferences(prev => ({
+                      ...prev,
+                      year_max: parseInt(e.target.value) || 2026,
+                    }))
+                  }
+                  className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Condition */}
+          <div className="bg-gradient-to-br from-slate-800/30 to-slate-900/30 border border-slate-700/30 rounded-2xl p-6">
+            <h2 className="text-xl font-bold text-white mb-4">Condition Preference</h2>
+            <div className="flex gap-3">
+              {CONDITION_OPTIONS.map(condition => (
+                <label key={condition} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="condition"
+                    value={condition}
+                    checked={preferences.condition === condition}
+                    onChange={e =>
+                      setPreferences(prev => ({
+                        ...prev,
+                        condition: e.target.value as 'New' | 'Used' | 'Any',
+                      }))
+                    }
+                    className="w-4 h-4 accent-blue-500"
+                  />
+                  <span className="text-gray-300">{condition}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Body Types */}
+          <div className="bg-gradient-to-br from-slate-800/30 to-slate-900/30 border border-slate-700/30 rounded-2xl p-6">
+            <h2 className="text-xl font-bold text-white mb-4">Body Type Preference</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {BODY_TYPE_OPTIONS.map(bodyType => (
+                <label key={bodyType} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={preferences.body_types.includes(bodyType)}
+                    onChange={() => toggleBodyType(bodyType)}
+                    className="w-4 h-4 accent-blue-500"
+                  />
+                  <span className="text-gray-300">{bodyType}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Notifications */}
+          <div className="bg-gradient-to-br from-slate-800/30 to-slate-900/30 border border-slate-700/30 rounded-2xl p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Zap className="w-5 h-5 text-yellow-400" />
+                <div>
+                  <h2 className="text-xl font-bold text-white">Notifications</h2>
+                  <p className="text-sm text-gray-400">Get notified about matching deals</p>
+                </div>
+              </div>
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={preferences.notify_enabled}
+                  onChange={e =>
+                    setPreferences(prev => ({
+                      ...prev,
+                      notify_enabled: e.target.checked,
+                    }))
+                  }
+                  className="w-5 h-5 accent-blue-500"
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Save Button */}
+          <div className="flex gap-3">
+            <button
+              onClick={savePreferences}
+              disabled={saving}
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all duration-200"
+            >
+              {saving ? 'Saving...' : 'Save Preferences'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
