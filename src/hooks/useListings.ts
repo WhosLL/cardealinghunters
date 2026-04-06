@@ -12,13 +12,19 @@ export interface ListingsFilters {
   dealScores?: string[];
 }
 
+export interface ListingWithStatus extends Listing {
+  isLiked?: boolean;
+  isSkipped?: boolean;
+}
+
 export function useListings(filters: ListingsFilters) {
   const { user } = useAuth();
-  const [listings, setListings] = useState<Listing[]>([]);
+  const [listings, setListings] = useState<ListingWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [viewedIds, setViewedIds] = useState<Set<string>>(new Set());
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchListings();
@@ -29,61 +35,49 @@ export function useListings(filters: ListingsFilters) {
       setLoading(true);
       setError(null);
 
-      let query = supabase
-        .from('listings')
-        .select('*', { count: 'exact' })
-        .eq('is_active', true);
+      // Build query with filters
+      let query = supabase.from('listings').select('*', { count: 'exact' }).eq('is_active', true);
 
-      if (filters.minPrice !== undefined) {
-        query = query.gte('price', filters.minPrice);
-      }
-      if (filters.maxPrice !== undefined) {
-        query = query.lte('price', filters.maxPrice);
-      }
-      if (filters.makes && filters.makes.length > 0) {
-        query = query.in('make', filters.makes);
-      }
-      if (filters.location) {
-        query = query.ilike('location', `%${filters.location}%`);
-      }
-      if (filters.maxMileage !== undefined) {
-        query = query.lte('mileage', filters.maxMileage);
-      }
-      if (filters.dealScores && filters.dealScores.length > 0) {
-        query = query.in('deal_score', filters.dealScores);
-      }
+      if (filters.minPrice !== undefined) query = query.gte('price', filters.minPrice);
+      if (filters.maxPrice !== undefined) query = query.lte('price', filters.maxPrice);
+      if (filters.makes && filters.makes.length > 0) query = query.in('make', filters.makes);
+      if (filters.location) query = query.ilike('location', `%${filters.location}%`);
+      if (filters.maxMileage !== undefined) query = query.lte('mileage', filters.maxMileage);
+      if (filters.dealScores && filters.dealScores.length > 0) query = query.in('deal_score', filters.dealScores);
 
-      // Get user's already-viewed listings to exclude them
-      let excludeIds: string[] = [];
+      // Get user actions to mark liked/skipped (but DON'T filter them out)
+      let userLikedIds = new Set<string>();
+      let userSkippedIds = new Set<string>();
       if (user) {
         const { data: actions } = await supabase
           .from('user_actions')
-          .select('listing_id')
+          .select('listing_id, action')
           .eq('user_id', user.id);
-
-        if (actions && actions.length > 0) {
-          excludeIds = actions.map((a: UserActionsRecord) => a.listing_id);
-          setViewedIds(new Set(excludeIds));
+        if (actions) {
+          for (const a of actions) {
+            if (a.action === 'like') userLikedIds.add(a.listing_id);
+            else if (a.action === 'skip') userSkippedIds.add(a.listing_id);
+          }
         }
+        setLikedIds(userLikedIds);
+        setViewedIds(new Set([...userLikedIds, ...userSkippedIds]));
       }
 
       query = query.order('created_at', { ascending: false }).limit(50);
-
       const { data, error: queryError, count } = await query;
-
       if (queryError) throw queryError;
 
-      let filtered = data || [];
-      if (excludeIds.length > 0) {
-        filtered = filtered.filter((l: Listing) => !excludeIds.includes(l.id));
-      }
+      // Annotate listings with liked/skipped status
+      const annotated: ListingWithStatus[] = (data || []).map((l: Listing) => ({
+        ...l,
+        isLiked: userLikedIds.has(l.id),
+        isSkipped: userSkippedIds.has(l.id),
+      }));
 
-      setListings(filtered);
+      setListings(annotated);
       setTotalCount(count || 0);
     } catch (err: any) {
-      const message = err?.message || err?.details || 'Failed to fetch listings';
-      setError(message);
-      console.error('Error fetching listings:', err);
+      setError(err?.message || 'Failed to fetch listings');
     } finally {
       setLoading(false);
     }
@@ -91,15 +85,21 @@ export function useListings(filters: ListingsFilters) {
 
   const handleLike = async (listingId: string) => {
     if (!user) return;
-
     try {
+      // Check if already liked
+      if (likedIds.has(listingId)) return;
+
       await supabase.from('user_actions').insert({
         user_id: user.id,
         listing_id: listingId,
         action: 'like',
       });
 
-      // Update preferences based on liked listing
+      // Update local state immediately
+      setLikedIds(prev => new Set(prev).add(listingId));
+      setListings(prev => prev.map(l => l.id === listingId ? { ...l, isLiked: true } : l));
+
+      // Learn preferences from liked listing
       const likedListing = listings.find(l => l.id === listingId);
       if (likedListing) {
         const { data: currentPrefs } = await supabase
@@ -107,46 +107,32 @@ export function useListings(filters: ListingsFilters) {
           .select('*')
           .eq('user_id', user.id)
           .single();
-
         if (currentPrefs) {
           const makes = currentPrefs.preferred_makes || [];
           const locations = currentPrefs.preferred_locations || [];
-          if (likedListing.make && !makes.includes(likedListing.make)) {
-            makes.push(likedListing.make);
-          }
-          if (likedListing.location && !locations.includes(likedListing.location)) {
-            locations.push(likedListing.location);
-          }
+          if (likedListing.make && !makes.includes(likedListing.make)) makes.push(likedListing.make);
+          if (likedListing.location && !locations.includes(likedListing.location)) locations.push(likedListing.location);
           await supabase
             .from('user_preferences')
-            .update({
-              preferred_makes: makes,
-              preferred_locations: locations,
-            })
+            .update({ preferred_makes: makes, preferred_locations: locations })
             .eq('user_id', user.id);
         }
       }
-
-      setViewedIds(prev => new Set(prev).add(listingId));
-      setListings(prev => prev.filter(l => l.id !== listingId));
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error liking listing:', err);
     }
   };
 
   const handleSkip = async (listingId: string) => {
     if (!user) return;
-
     try {
       await supabase.from('user_actions').insert({
         user_id: user.id,
         listing_id: listingId,
         action: 'skip',
       });
-
-      setViewedIds(prev => new Set(prev).add(listingId));
-      setListings(prev => prev.filter(l => l.id !== listingId));
-    } catch (err: any) {
+      setListings(prev => prev.map(l => l.id === listingId ? { ...l, isSkipped: true } : l));
+    } catch (err) {
       console.error('Error skipping listing:', err);
     }
   };
@@ -163,23 +149,22 @@ export function useListings(filters: ListingsFilters) {
   };
 }
 
-
 export function useSavedListings() {
   const { user } = useAuth();
-  const [listings, setListings] = useState<Listing[]>([]);
+  const [savedListings, setSavedListings] = useState<ListingWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!user) {
+      setSavedListings([]);
+      setLoading(false);
+      return;
+    }
     fetchSavedListings();
   }, [user]);
 
   const fetchSavedListings = async () => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
       setError(null);
@@ -187,29 +172,31 @@ export function useSavedListings() {
       const { data: actions } = await supabase
         .from('user_actions')
         .select('listing_id')
-        .eq('user_id', user.id)
+        .eq('user_id', user?.id)
         .eq('action', 'like');
 
       if (!actions || actions.length === 0) {
-        setListings([]);
-        setLoading(false);
+        setSavedListings([]);
         return;
       }
 
-      const likedIds = actions.map((a: UserActionsRecord) => a.listing_id);
-
-      const { data: likedListings, error: queryError } = await supabase
+      const listingIds = actions.map(a => a.listing_id);
+      const { data: listings, error: queryError } = await supabase
         .from('listings')
         .select('*')
-        .in('id', likedIds);
+        .in('id', listingIds)
+        .eq('is_active', true);
 
       if (queryError) throw queryError;
 
-      setListings(likedListings || []);
+      const annotated: ListingWithStatus[] = (listings || []).map(l => ({
+        ...l,
+        isLiked: true,
+      }));
+
+      setSavedListings(annotated);
     } catch (err: any) {
-      const message = err?.message || 'Failed to fetch saved listings';
-      setError(message);
-      console.error('Error fetching saved listings:', err);
+      setError(err?.message || 'Failed to fetch saved listings');
     } finally {
       setLoading(false);
     }
@@ -217,7 +204,6 @@ export function useSavedListings() {
 
   const handleUnlike = async (listingId: string) => {
     if (!user) return;
-
     try {
       await supabase
         .from('user_actions')
@@ -226,14 +212,14 @@ export function useSavedListings() {
         .eq('listing_id', listingId)
         .eq('action', 'like');
 
-      setListings(prev => prev.filter(l => l.id !== listingId));
-    } catch (err: any) {
+      setSavedListings(prev => prev.filter(l => l.id !== listingId));
+    } catch (err) {
       console.error('Error unliking listing:', err);
     }
   };
 
   return {
-    listings,
+    savedListings,
     loading,
     error,
     handleUnlike,
