@@ -34,8 +34,6 @@ export function BrowsePage() {
 
           {/* Action buttons */}
           <div className="flex flex-col sm:flex-row gap-3">
-            
-
             <button
               onClick={handleRefresh}
               disabled={loading}
@@ -46,9 +44,6 @@ export function BrowsePage() {
             </button>
           </div>
 
-          
-            </div>
-          )}
         </div>
       </div>
 
