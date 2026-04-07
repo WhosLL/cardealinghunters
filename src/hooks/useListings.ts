@@ -138,6 +138,22 @@ export function useListings(filters: ListingsFilters) {
     }
   };
 
+
+  const handleContact = async (listingId: string) => {
+    if (!user) return;
+    try {
+      await supabase
+        .from('user_actions')
+        .insert({
+          user_id: user.id,
+          listing_id: listingId,
+          action: 'contact',
+        });
+    } catch (err) {
+      console.error('Error logging contact:', err);
+    }
+  };
+
   const loadMore = () => setDisplayCount(prev => prev + 20);
   const hasMore = listings.length >= displayCount && listings.length < totalCount;
 
@@ -150,6 +166,7 @@ export function useListings(filters: ListingsFilters) {
     handleLike,
     handleSkip,
     refetch: fetchListings,
+    handleContact,
     loadMore,
     hasMore,
   };
