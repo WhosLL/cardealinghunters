@@ -312,6 +312,9 @@ export async function processRawListings(rawListings: any[]): Promise<number> {
     }
   }
 
+  // Upload images to Supabase Storage in background
+  uploadListingImages().catch(err => console.error('Image upload batch failed:', err));
+
   return insertedCount;
 }
 
@@ -425,4 +428,42 @@ export function getScraperSources() {
   return [
     { id: 'craigslist' as ScraperSource, name: 'Craigslist', defaultUrl: 'https://losangeles.craigslist.org/search/cta' },
   ];
+}
+
+
+export async function uploadListingImages() {
+  // Query listings with external image URLs (not yet uploaded to Supabase Storage)
+  const { data: listings, error } = await supabase
+    .from('listings')
+    .select('id, image_url')
+    .not('image_url', 'is', null)
+    .not('image_url', 'eq', '')
+    .not('image_url', 'ilike', '%supabase%');
+
+  if (error || !listings || listings.length === 0) {
+    return 0;
+  }
+
+  let uploadedCount = 0;
+
+  for (const listing of listings) {
+    try {
+      const response = await fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: listing.image_url,
+          listingId: listing.id,
+        }),
+      });
+
+      if (response.ok) {
+        uploadedCount++;
+      }
+    } catch (err) {
+      console.error('Failed to upload image for listing ' + listing.id, err);
+    }
+  }
+
+  return uploadedCount;
 }
