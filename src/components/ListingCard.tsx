@@ -9,6 +9,27 @@ interface ListingCardProps {
   onContact?: (id: string) => void;
 }
 
+/**
+ * Proxy Craigslist image URLs through our edge function to bypass hotlink blocking.
+ * Non-Craigslist URLs (e.g. Unsplash seed data, Supabase Storage) pass through unchanged.
+ */
+function getProxiedImageUrl(url: string): string {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    const isCraigslist =
+      parsed.hostname === 'images.craigslist.org' ||
+      parsed.hostname === 'ci.craigslist.org' ||
+      parsed.hostname.endsWith('.craigslist.org');
+    if (isCraigslist) {
+      return '/api/image-proxy?url=' + encodeURIComponent(url);
+    }
+  } catch {
+    // If URL parsing fails, return as-is
+  }
+  return url;
+}
+
 function getDealExplanation(price: number, marketValue: number, dealScore: string): { text: string; color: string } {
   if (!marketValue || marketValue <= 0) return { text: '', color: '' };
 
@@ -27,22 +48,22 @@ function getDealExplanation(price: number, marketValue: number, dealScore: strin
   switch (dealScore) {
     case 'great':
       return {
-        text: `Save ${diffFormatted} vs market avg of ${mvFormatted}`,
+        text: 'Save ' + diffFormatted + ' vs market avg of ' + mvFormatted,
         color: 'text-emerald-400',
       };
     case 'good':
       return {
-        text: `${diffFormatted} below market value of ${mvFormatted}`,
+        text: diffFormatted + ' below market value of ' + mvFormatted,
         color: 'text-yellow-400',
       };
     case 'fair':
       return {
-        text: `Near market value of ${mvFormatted}`,
+        text: 'Near market value of ' + mvFormatted,
         color: 'text-gray-400',
       };
     case 'overpriced':
       return {
-        text: `~${diffFormatted} above market avg of ${mvFormatted}`,
+        text: '~' + diffFormatted + ' above market avg of ' + mvFormatted,
         color: 'text-red-400',
       };
     default:
@@ -109,6 +130,9 @@ export function ListingCard({ listing, onLike, onSkip, onContact }: ListingCardP
 
   const isDarkMode = true; // Assuming dark theme
 
+  // Proxy Craigslist images to bypass hotlink blocking
+  const imageSrc = getProxiedImageUrl(listing.image_url);
+
   return (
     <div
       className={`group relative rounded-2xl overflow-hidden transition-all duration-300 transform ${
@@ -130,7 +154,7 @@ export function ListingCard({ listing, onLike, onSkip, onContact }: ListingCardP
       {/* Image container with overlay gradient */}
       <div className="relative h-48 overflow-hidden">
         <img
-          src={listing.image_url}
+          src={imageSrc}
           alt={listing.title}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
         />
@@ -250,4 +274,4 @@ export function ListingCard({ listing, onLike, onSkip, onContact }: ListingCardP
       </div>
     </div>
   );
-}
+      }
