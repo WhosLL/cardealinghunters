@@ -25,10 +25,11 @@ export function useListings(filters: ListingsFilters) {
   const [totalCount, setTotalCount] = useState(0);
   const [viewedIds, setViewedIds] = useState<Set<string>>(new Set());
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [displayCount, setDisplayCount] = useState(20);
 
   useEffect(() => {
     fetchListings();
-  }, [filters, user]);
+  }, [filters, user, displayCount]);
 
   const fetchListings = async () => {
     try {
@@ -63,7 +64,7 @@ export function useListings(filters: ListingsFilters) {
         setViewedIds(new Set([...userLikedIds, ...userSkippedIds]));
       }
 
-      query = query.order('created_at', { ascending: false }).limit(50);
+      query = query.order('created_at', { ascending: false }).limit(displayCount);
       const { data, error: queryError, count } = await query;
       if (queryError) throw queryError;
 
@@ -137,6 +138,9 @@ export function useListings(filters: ListingsFilters) {
     }
   };
 
+  const loadMore = () => setDisplayCount(prev => prev + 20);
+  const hasMore = listings.length >= displayCount && listings.length < totalCount;
+
   return {
     listings,
     loading,
@@ -146,6 +150,8 @@ export function useListings(filters: ListingsFilters) {
     handleLike,
     handleSkip,
     refetch: fetchListings,
+    loadMore,
+    hasMore,
   };
 }
 
