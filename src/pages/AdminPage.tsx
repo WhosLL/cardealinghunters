@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Search, Play, CheckCircle, XCircle, Loader, Globe, Car } from 'lucide-react';
 import {
-  triggerApifyScrape,
-  getApifyRunStatus,
-  getApifyDataset,
-  processAndInsertListings,
+  scrapeCraigslist,
+  processRawListings,
   getScraperSources,
   ScraperSource,
 } from '../lib/apify';
@@ -12,7 +10,6 @@ import { supabase } from '../lib/supabase';
 
 interface ScrapeJob {
   id: string;
-  apify_run_id: string;
   source: string;
   search_url: string;
   status: string;
@@ -26,7 +23,6 @@ export function AdminPage() {
   const [selectedSource, setSelectedSource] = useState<ScraperSource>('craigslist');
   const [searchUrl, setSearchUrl] = useState(sources[0].defaultUrl);
   const [isRunning, setIsRunning] = useState(false);
-  const [currentRunId, setCurrentRunId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState('');
   const [scrapeHistory, setScrapeHistory] = useState<ScrapeJob[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -50,56 +46,50 @@ export function AdminPage() {
   };
 
   const handleScrape = async () => {
-    if (!searchUrl.trim()) return;
+    if (!searchUrl) return;
     setIsRunning(true);
     setError(null);
-    setStatusMessage('Starting scrape...');
+    setStatusMessage('Starting direct Craigslist scrape...');
 
     try {
-      const runId = await triggerApifyScrape(searchUrl, selectedSource);
-      setCurrentRunId(runId);
-      setStatusMessage('Scrape started. Polling for results...');
+      setStatusMessage('Fetching listings from Craigslist...');
+      const rawListings = await scrapeCraigslist(searchUrl);
 
-      // Poll for completion
-      const pollInterval = setInterval(async () => {
-        try {
-          const statusData = await getApifyRunStatus(runId);
-          const status = statusData.data?.status;
+      if (!rawListings || rawListings.length === 0) {
+        setStatusMessage('No listings found. Try a different URL.');
+        setIsRunning(false);
+        return;
+      }
 
-          if (status === 'SUCCEEDED') {
-            clearInterval(pollInterval);
-            setStatusMessage('Scrape complete! Processing listings...');
-            const datasetId = statusData.data.defaultDatasetId;
-            const count = await processAndInsertListings(datasetId, runId, searchUrl, selectedSource);
-            setStatusMessage(`Done! Inserted ${count} new listings from ${sources.find(s => s.id === selectedSource)?.name}.`);
-            setIsRunning(false);
-            setCurrentRunId(null);
-            fetchScrapeHistory();
-          } else if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
-            clearInterval(pollInterval);
-            setError(`Scrape ${status.toLowerCase()}. Check your Apify dashboard for details.`);
-            setIsRunning(false);
-            setCurrentRunId(null);
-            await supabase.from('scrape_runs').update({ status: status.toLowerCase() }).eq('apify_run_id', runId);
-            fetchScrapeHistory();
-          } else {
-            setStatusMessage(`Status: ${status}... still working.`);
-          }
-        } catch (pollErr) {
-          console.error('Poll error:', pollErr);
-        }
-      }, 5000);
+      setStatusMessage(`Found ${rawListings.length} raw listings. Processing and inserting...`);
+      const insertedCount = await processRawListings(rawListings);
 
-      // Safety timeout after 5 minutes
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        if (isRunning) {
-          setStatusMessage('Scrape is taking longer than expected. Check Admin history for updates.');
-          setIsRunning(false);
-        }
-      }, 300000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start scrape');
+      // Record the scrape run
+      await supabase.from('scrape_runs').insert({
+        source: selectedSource,
+        search_url: searchUrl,
+        status: 'completed',
+        listings_added: insertedCount,
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+      });
+
+      setStatusMessage(`Done! Inserted ${insertedCount} listings from ${rawListings.length} found.`);
+      fetchScrapeHistory();
+    } catch (err: any) {
+      setError(err.message || 'Scrape failed');
+      setStatusMessage('Scrape failed.');
+
+      // Record failed run
+      await supabase.from('scrape_runs').insert({
+        source: selectedSource,
+        search_url: searchUrl,
+        status: 'failed',
+        listings_added: 0,
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+      });
+    } finally {
       setIsRunning(false);
     }
   };
