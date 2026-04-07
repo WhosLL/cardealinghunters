@@ -7,31 +7,7 @@ import { RefreshCw, Loader } from 'lucide-react';
 export function BrowsePage() {
   const [filters, setFilters] = useState<ListingsFilters>({});
 
-  const { listings, loading, error, totalCount, handleLike, handleSkip, refetch } = useListings(filters);
-  const [seeding, setSeeding] = useState(false);
-  const [seedError, setSeedError] = useState<string | null>(null);
-
-  const handleSeedListings = async () => {
-    setSeeding(true);
-    setSeedError(null);
-    try {
-      const response = await fetch('/api/seed-listings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to seed listings');
-      }
-
-      await refetch();
-    } catch (err: any) {
-      setSeedError(err?.message || 'Failed to seed listings');
-    } finally {
-      setSeeding(false);
-    }
-  };
+  const { listings, loading, error, totalCount, handleLike, handleSkip, refetch, loadMore, hasMore } = useListings(filters);
 
   const handleRefresh = async () => {
     await refetch();
@@ -58,23 +34,7 @@ export function BrowsePage() {
 
           {/* Action buttons */}
           <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              onClick={handleSeedListings}
-              disabled={seeding}
-              className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
-            >
-              {seeding ? (
-                <>
-                  <Loader className="w-5 h-5 animate-spin" />
-                  Seeding...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-5 h-5" />
-                  Load Demo Listings
-                </>
-              )}
-            </button>
+            
 
             <button
               onClick={handleRefresh}
@@ -86,9 +46,7 @@ export function BrowsePage() {
             </button>
           </div>
 
-          {seedError && (
-            <div className="mt-4 p-3 bg-red-900/30 border border-red-500/50 rounded-lg text-red-300 text-sm">
-              {seedError}
+          
             </div>
           )}
         </div>
@@ -137,6 +95,17 @@ export function BrowsePage() {
               />
             ))}
           </div>
+
+          {hasMore && (
+            <div className="flex justify-center mt-8">
+              <button
+                onClick={loadMore}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Load More
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -148,23 +117,6 @@ export function BrowsePage() {
             <p className="text-gray-500 mb-6">
               Try adjusting your filters or seed demo data to get started.
             </p>
-            <button
-              onClick={handleSeedListings}
-              disabled={seeding}
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all duration-200"
-            >
-              {seeding ? (
-                <>
-                  <Loader className="w-5 h-5 animate-spin" />
-                  Seeding...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-5 h-5" />
-                  Load Demo Listings
-                </>
-              )}
-            </button>
           </div>
         </div>
       )}
