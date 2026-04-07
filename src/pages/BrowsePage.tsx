@@ -7,7 +7,7 @@ import { RefreshCw, Loader } from 'lucide-react';
 export function BrowsePage() {
   const [filters, setFilters] = useState<ListingsFilters>({});
 
-  const { listings, loading, error, totalCount, handleLike, handleSkip, refetch, loadMore, hasMore } = useListings(filters);
+  const { listings, loading, error, totalCount, handleLike, handleSkip, refetch, loadMore, hasMore, handleContact } = useListings(filters);
 
   const handleRefresh = async () => {
     await refetch();
@@ -92,6 +92,7 @@ export function BrowsePage() {
                 listing={listing}
                 onLike={handleLike}
                 onSkip={handleSkip}
+              onContact={handleContact}
               />
             ))}
           </div>
