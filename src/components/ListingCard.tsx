@@ -6,6 +6,7 @@ interface ListingCardProps {
   listing: ListingWithStatus;
   onLike: (id: string) => void;
   onSkip: (id: string) => void;
+  onContact?: (id: string) => void;
 }
 
 function getDealExplanation(price: number, marketValue: number, dealScore: string): { text: string; color: string } {
@@ -89,7 +90,7 @@ function getDealBadgeStyles(dealScore: string): { bg: string; text: string; glow
   }
 }
 
-export function ListingCard({ listing, onLike, onSkip }: ListingCardProps) {
+export function ListingCard({ listing, onLike, onSkip, onContact }: ListingCardProps) {
   const [hovered, setHovered] = useState(false);
   const dealBadge = getDealBadgeStyles(listing.deal_score);
   const dealExplanation = getDealExplanation(listing.price, listing.market_value, listing.deal_score);
@@ -233,15 +234,18 @@ export function ListingCard({ listing, onLike, onSkip }: ListingCardProps) {
             <span className="text-sm">{listing.isSkipped ? 'Skipped' : 'Skip'}</span>
           </button>
 
-          {/* External link button */}
-          <a
-            href={listing.source_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center py-2 px-3 rounded-lg font-medium transition-all duration-200 bg-slate-700/50 border border-slate-600/50 text-gray-300 hover:bg-blue-500/30 hover:border-blue-500/50 hover:text-blue-400"
-          >
-            <ExternalLink className="w-4 h-4" />
-          </a>
+          {listing.source_url && (
+            <button
+              onClick={() => {
+                window.open(listing.source_url, '_blank');
+                if (onContact) onContact(listing.id);
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-colors font-medium"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Contact Seller
+            </button>
+          )}
         </div>
       </div>
     </div>
