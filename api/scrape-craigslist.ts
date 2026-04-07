@@ -20,7 +20,7 @@ export default async function handler(req: any, res: any) {
     });
 
     if (!response.ok) {
-      return res.status(502).json({ error: `Craigslist returned ${response.status}` });
+      return res.status(502).json({ error: 'Craigslist returned ' + response.status });
     }
 
     const html = await response.text();
@@ -33,9 +33,59 @@ export default async function handler(req: any, res: any) {
 }
 
 function parseCraigslistHTML(html: string, baseUrl: string) {
-  const listings: any[] = [];
   const domainMatch = baseUrl.match(/https?:\/\/[^/]+/);
   const domain = domainMatch ? domainMatch[0] : '';
+
+  // ============================================================
+  // PRIMARY: Parse JSON-LD structured data (modern CL format)
+  // Craigslist embeds all listing data in a <script type="application/ld+json">
+  // tag with id="ld_searchpage_results"
+  // ============================================================
+  const jsonLdMatch = html.match(
+    /<script[^>]*id="ld_searchpage_results"[^>]*>([\s\S]*?)<\/script>/
+  );
+
+  if (jsonLdMatch) {
+    try {
+      const jsonLd = JSON.parse(jsonLdMatch[1]);
+      const items = jsonLd.itemListElement || [];
+
+      // Also extract URLs from HTML <a> tags since JSON-LD doesn't include them
+      const urlMap = extractUrlsFromHtml(html, domain);
+
+      return items
+        .map((entry: any) => {
+          const item = entry.item || {};
+          const title = item.name || '';
+          if (!title || title.length < 5) return null;
+
+          const offers = item.offers || {};
+          const price = offers.price || '0';
+          const address = offers.availableAtOrFrom?.address || {};
+          const location = [address.addressLocality, address.addressRegion]
+            .filter(Boolean)
+            .join(', ');
+
+          // Get first image from the image array
+          const images = item.image || [];
+          const imageUrl = images.length > 0 ? images[0] : '';
+
+          // Try to match URL by title (JSON-LD items are in same order as HTML links)
+          const position = entry.position || 0;
+          const url = urlMap[position - 1] || '';
+
+          return { title, price, url, location, imageUrl, description: item.description || '' };
+        })
+        .filter(Boolean);
+    } catch (e) {
+      // JSON-LD parsing failed, fall through to HTML patterns
+    }
+  }
+
+  // ============================================================
+  // FALLBACK: Regex-based HTML parsing (older CL formats)
+  // ============================================================
+  const listings: any[] = [];
 
   // Pattern 1: Modern CL format (cl-static-search-result or cl-search-result)
   const modernPattern =
@@ -67,6 +117,23 @@ function parseCraigslistHTML(html: string, baseUrl: string) {
   }
 
   return listings;
+}
+
+/**
+ * Extract listing URLs from HTML anchor tags.
+ * Returns an array of URLs in page order to match with JSON-LD positions.
+ */
+function extractUrlsFromHtml(html: string, domain: string): string[] {
+  const urls: string[] = [];
+  // Match links to individual CL listing pages (e.g. /cto/d/title-slug/1234567890.html)
+  const linkPattern = /href="((?:https?:\/\/[^"]*craigslist[^"]*|\/[^"]+)\/d\/[^"]+\.html)"/gi;
+  let match;
+  while ((match = linkPattern.exec(html)) !== null) {
+    let url = match[1];
+    if (!url.startsWith('http')) url = domain + url;
+    urls.push(url);
+  }
+  return urls;
 }
 
 function extractFromBlock(block: string, domain: string) {
@@ -107,8 +174,8 @@ function extractFromBlock(block: string, domain: string) {
     ) || block.match(/data-ids="[^"]*?:([^,"\s]+)/i);
   let imageUrl = imgMatch ? imgMatch[1] : '';
   if (imageUrl && !imageUrl.startsWith('http') && imageUrl.length > 10) {
-    imageUrl = `https://images.craigslist.org/${imageUrl}_300x300.jpg`;
+    imageUrl = 'https://images.craigslist.org/' + imageUrl + '_300x300.jpg';
   }
 
   return { title, price, url, location, imageUrl };
-}
+            }
