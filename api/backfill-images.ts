@@ -1,14 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 
-/**
- * Backfill images for listings that have a source_url but no image_url.
- * Fetches each listing's Craigslist page and extracts the og:image meta tag,
- * or parses the JSON-LD on the individual listing page.
- *
- * Processes in batches to avoid timeouts.
- * Trigger via: GET /api/backfill-images?batch=50
- */
-
 const supabaseUrl = 'https://sbhjuntwwyavdnpsgzjb.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNiaGp1bnR3d3lhdmRucHNnempiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNTU2NzMsImV4cCI6MjA5MDkzMTY3M30.dl_6gY4ag0NdlI-yuDjijW_9uc9GP9E-eLp9snHLuZk';
 
@@ -20,13 +11,13 @@ export default async function handler(req: any, res: any) {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    // Get listings with source_url but no image_url
     const { data: listings, error } = await supabase
       .from('listings')
       .select('id, source_url')
       .not('source_url', 'eq', '')
       .not('source_url', 'is', null)
       .or('image_url.is.null,image_url.eq.')
+      .order('created_at', { ascending: false })
       .limit(batchSize);
 
     if (error) {
@@ -40,7 +31,6 @@ export default async function handler(req: any, res: any) {
     let updated = 0;
     let failed = 0;
 
-    // Process listings concurrently in small groups of 5
     for (let i = 0; i < listings.length; i += 5) {
       const batch = listings.slice(i, i + 5);
       const results = await Promise.allSettled(
@@ -66,7 +56,6 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // Check how many still need backfilling
     const { count } = await supabase
       .from('listings')
       .select('id', { count: 'exact', head: true })
@@ -79,22 +68,12 @@ export default async function handler(req: any, res: any) {
       updated,
       failed,
       remaining: count || 0,
-      hint: count && count > 0
-        ? 'Call this endpoint again to process more. ' + Math.ceil((count || 0) / batchSize) + ' batches remaining.'
-        : 'All listings have images now!',
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'Backfill failed' });
   }
 }
 
-/**
- * Fetch a single Craigslist listing page and extract the image URL.
- * Tries multiple methods:
- * 1. og:image meta tag
- * 2. JSON-LD structured data
- * 3. First large image src in the page
- */
 async function fetchImageFromListingPage(url: string): Promise<string> {
   try {
     const response = await fetch(url, {
@@ -110,27 +89,22 @@ async function fetchImageFromListingPage(url: string): Promise<string> {
     if (!response.ok) return '';
     const html = await response.text();
 
-    // Method 1: og:image meta tag (most reliable)
     const ogMatch = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"/i)
       || html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:image"/i);
     if (ogMatch && ogMatch[1].includes('craigslist.org')) {
       return ogMatch[1];
     }
 
-    // Method 2: JSON-LD on the individual listing page
     const ldMatch = html.match(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/);
     if (ldMatch) {
       try {
         const ld = JSON.parse(ldMatch[1]);
         const images = ld.image || (ld.itemListElement?.[0]?.item?.image);
-        if (Array.isArray(images) && images.length > 0) {
-          return images[0];
-        }
+        if (Array.isArray(images) && images.length > 0) return images[0];
         if (typeof images === 'string') return images;
       } catch {}
     }
 
-    // Method 3: First image src matching craigslist image CDN
     const imgMatch = html.match(/src="(https:\/\/images\.craigslist\.org\/[^"]+\.jpg)"/i);
     if (imgMatch) return imgMatch[1];
 
@@ -138,4 +112,4 @@ async function fetchImageFromListingPage(url: string): Promise<string> {
   } catch {
     return '';
   }
-    }
+}
