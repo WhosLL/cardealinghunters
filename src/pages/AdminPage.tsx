@@ -51,12 +51,26 @@ export function AdminPage() {
     setError(null);
     setStatusMessage('Starting direct Craigslist scrape...');
 
+    // FIX: capture the true start time before we do any work
+    const startedAt = new Date().toISOString();
+
     try {
       setStatusMessage('Fetching listings from Craigslist...');
       const rawListings = await scrapeCraigslist(searchUrl);
 
       if (!rawListings || rawListings.length === 0) {
         setStatusMessage('No listings found. Try a different URL.');
+
+        // FIX: still record this as a run so you can see empty attempts
+        await supabase.from('scrape_runs').insert({
+          source: selectedSource,
+          search_url: searchUrl,
+          status: 'completed',
+          listings_added: 0,
+          started_at: startedAt,
+          completed_at: new Date().toISOString(),
+        });
+
         setIsRunning(false);
         return;
       }
@@ -70,7 +84,7 @@ export function AdminPage() {
         search_url: searchUrl,
         status: 'completed',
         listings_added: insertedCount,
-        started_at: new Date().toISOString(),
+        started_at: startedAt,
         completed_at: new Date().toISOString(),
       });
 
@@ -86,7 +100,7 @@ export function AdminPage() {
         search_url: searchUrl,
         status: 'failed',
         listings_added: 0,
-        started_at: new Date().toISOString(),
+        started_at: startedAt,
         completed_at: new Date().toISOString(),
       });
     } finally {
