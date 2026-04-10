@@ -19,8 +19,16 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
+const ALLOWED_ORIGINS = [
+  'https://cardealinghunters.vercel.app',
+  'http://localhost:5173',
+];
+
 export default async function handler(req: any, res: any) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers?.origin || '';
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (!supabaseUrl || !serviceRoleKey) {

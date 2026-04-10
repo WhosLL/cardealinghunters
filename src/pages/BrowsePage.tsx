@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { useListings, ListingsFilters } from '../hooks/useListings';
+import { useListings, ListingsFilters, SortOption } from '../hooks/useListings';
 import { Filters } from '../components/Filters';
 import { ListingCard } from '../components/ListingCard';
-import { RefreshCw, Loader } from 'lucide-react';
+import { RefreshCw, Loader, Search } from 'lucide-react';
 
 export function BrowsePage() {
   const [filters, setFilters] = useState<ListingsFilters>({});
+  const [searchInput, setSearchInput] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('newest');
 
   const { listings, loading, error, totalCount, handleLike, handleSkip, refetch, loadMore, hasMore, handleContact } = useListings(filters);
 
@@ -32,8 +34,36 @@ export function BrowsePage() {
             )}
           </p>
 
-          {/* Action buttons */}
+          {/* Search + Sort + Refresh */}
           <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={e => {
+                  setSearchInput(e.target.value);
+                  setFilters(prev => ({ ...prev, search: e.target.value || undefined }));
+                }}
+                placeholder="Search by make, model, or keyword..."
+                className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+              />
+            </div>
+            <select
+              value={sortBy}
+              onChange={e => {
+                const val = e.target.value as SortOption;
+                setSortBy(val);
+                setFilters(prev => ({ ...prev, sort: val }));
+              }}
+              className="px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-gray-300 focus:outline-none focus:border-blue-500/50 cursor-pointer"
+            >
+              <option value="newest">Newest First</option>
+              <option value="price_asc">Price: Low to High</option>
+              <option value="price_desc">Price: High to Low</option>
+              <option value="mileage_asc">Mileage: Low to High</option>
+              <option value="mileage_desc">Mileage: High to Low</option>
+            </select>
             <button
               onClick={handleRefresh}
               disabled={loading}
@@ -87,7 +117,7 @@ export function BrowsePage() {
                 listing={listing}
                 onLike={handleLike}
                 onSkip={handleSkip}
-              onContact={handleContact}
+                onContact={handleContact}
               />
             ))}
           </div>
@@ -119,4 +149,3 @@ export function BrowsePage() {
     </div>
   );
 }
-

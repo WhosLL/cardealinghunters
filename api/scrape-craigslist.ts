@@ -10,15 +10,55 @@
 //   - Diagnostic counters so you can see in logs how many images were extracted
 //   - Improved HTML fallback for lazy-loaded images (srcset, data-src, data-ids)
 
-export default async function handler(req: any, res: any) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+const ALLOWED_ORIGINS = [
+  'https://cardealinghunters.vercel.app',
+  'http://localhost:5173',
+];
+
+function setCorsHeaders(req: any, res: any) {
+  const origin = req.headers?.origin || '';
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
+const rateMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 10;
+const RATE_WINDOW = 60_000;
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW });
+    return false;
+  }
+  entry.count++;
+  return entry.count > RATE_LIMIT;
+}
+
+export default async function handler(req: any, res: any) {
+  setCorsHeaders(req, res);
   if (req.method === "OPTIONS") return res.status(200).end();
 
+  const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || 'unknown';
+  if (isRateLimited(clientIp)) {
+    return res.status(429).json({ error: 'Too many requests. Please wait a minute.' });
+  }
+
   const searchUrl = req.query.searchUrl as string;
-  if (!searchUrl || !searchUrl.includes("craigslist.org")) {
+  if (!searchUrl) {
     return res.status(400).json({ error: "Valid Craigslist URL required" });
+  }
+  try {
+    const parsed = new URL(searchUrl);
+    if (!parsed.hostname.endsWith('.craigslist.org') && parsed.hostname !== 'craigslist.org') {
+      return res.status(400).json({ error: "URL must be a craigslist.org domain" });
+    }
+  } catch {
+    return res.status(400).json({ error: "Invalid URL format" });
   }
 
   try {

@@ -93,8 +93,26 @@ export function PreferencesPage() {
     }
   };
 
+  const validatePreferences = (): string | null => {
+    if (preferences.preferred_price_min < 0) return 'Min price cannot be negative';
+    if (preferences.preferred_price_max < 0) return 'Max price cannot be negative';
+    if (preferences.preferred_price_min > preferences.preferred_price_max) return 'Min price cannot be greater than max price';
+    if (preferences.preferred_mileage_max < 0) return 'Max mileage cannot be negative';
+    if (preferences.year_min < 1900 || preferences.year_min > 2030) return 'Min year must be between 1900 and 2030';
+    if (preferences.year_max < 1900 || preferences.year_max > 2030) return 'Max year must be between 1900 and 2030';
+    if (preferences.year_min > preferences.year_max) return 'Min year cannot be greater than max year';
+    return null;
+  };
+
   const savePreferences = async () => {
     if (!user) return;
+
+    const validationError = validatePreferences();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setSaving(true);
     setError(null);
 

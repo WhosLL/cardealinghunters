@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { Listing, UserActionsRecord } from '../types/index';
 import { useAuth } from './useAuth';
 
+export type SortOption = 'newest' | 'price_asc' | 'price_desc' | 'mileage_asc' | 'mileage_desc';
+
 export interface ListingsFilters {
   minPrice?: number;
   maxPrice?: number;
@@ -10,6 +12,8 @@ export interface ListingsFilters {
   location?: string;
   maxMileage?: number;
   dealScores?: string[];
+  search?: string;
+  sort?: SortOption;
 }
 
 export interface ListingWithStatus extends Listing {
@@ -45,6 +49,7 @@ export function useListings(filters: ListingsFilters) {
       if (filters.location) query = query.ilike('location', `%${filters.location}%`);
       if (filters.maxMileage !== undefined) query = query.lte('mileage', filters.maxMileage);
       if (filters.dealScores && filters.dealScores.length > 0) query = query.in('deal_score', filters.dealScores);
+      if (filters.search) query = query.or(`title.ilike.%${filters.search}%,make.ilike.%${filters.search}%,model.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
 
       // Get user actions to mark liked/skipped (but DON'T filter them out)
       let userLikedIds = new Set<string>();
@@ -64,7 +69,16 @@ export function useListings(filters: ListingsFilters) {
         setViewedIds(new Set([...userLikedIds, ...userSkippedIds]));
       }
 
-      query = query.order('created_at', { ascending: false }).limit(displayCount);
+      // Apply sort
+      const sort = filters.sort || 'newest';
+      switch (sort) {
+        case 'price_asc': query = query.order('price', { ascending: true }); break;
+        case 'price_desc': query = query.order('price', { ascending: false }); break;
+        case 'mileage_asc': query = query.order('mileage', { ascending: true }); break;
+        case 'mileage_desc': query = query.order('mileage', { ascending: false }); break;
+        default: query = query.order('created_at', { ascending: false });
+      }
+      query = query.limit(displayCount);
       const { data, error: queryError, count } = await query;
       if (queryError) throw queryError;
 
