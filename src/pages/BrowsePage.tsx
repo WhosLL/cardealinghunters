@@ -59,6 +59,7 @@ export function BrowsePage() {
               className="px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-gray-300 focus:outline-none focus:border-blue-500/50 cursor-pointer"
             >
               <option value="newest">Newest First</option>
+              <option value="best_deal">Best Deals First</option>
               <option value="price_asc">Price: Low to High</option>
               <option value="price_desc">Price: High to Low</option>
               <option value="mileage_asc">Mileage: Low to High</option>

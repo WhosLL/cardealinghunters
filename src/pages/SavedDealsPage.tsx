@@ -39,8 +39,6 @@ export function SavedDealsPage() {
               listing={listing}
               onLike={() => {}}
               onSkip={() => {}}
-              onUnlike={handleUnlike}
-              showUnlike={true}
             />
           ))}
         </div>

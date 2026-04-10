@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Listing, UserActionsRecord } from '../types/index';
 import { useAuth } from './useAuth';
 
-export type SortOption = 'newest' | 'price_asc' | 'price_desc' | 'mileage_asc' | 'mileage_desc';
+export type SortOption = 'newest' | 'price_asc' | 'price_desc' | 'mileage_asc' | 'mileage_desc' | 'best_deal';
 
 export interface ListingsFilters {
   minPrice?: number;
@@ -76,6 +76,7 @@ export function useListings(filters: ListingsFilters) {
         case 'price_desc': query = query.order('price', { ascending: false }); break;
         case 'mileage_asc': query = query.order('mileage', { ascending: true }); break;
         case 'mileage_desc': query = query.order('mileage', { ascending: false }); break;
+        case 'best_deal': query = query.order('deal_score_numeric', { ascending: false, nullsFirst: false }); break;
         default: query = query.order('created_at', { ascending: false });
       }
       query = query.limit(displayCount);

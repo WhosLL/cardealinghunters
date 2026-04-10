@@ -16,6 +16,7 @@ export interface Listing {
   source: string;
   market_value: number | null;
   deal_score: DealScore;
+  deal_score_numeric: number | null;
   description: string;
   posted_at: string;
   created_at: string;
@@ -79,4 +80,37 @@ export interface AuthContextType {
 
 export interface ListingWithAction extends Listing {
   user_action?: UserActionsRecord | null;
+}
+
+
+export interface MarketStats {
+  market_value: number | null;
+  median_price: number;
+  avg_price: number;
+  p25_price: number;
+  p75_price: number;
+  sample_size: number;
+  avg_mileage: number;
+  mileage_adjustment: number;
+  tier: 'exact' | 'nearby_year' | 'broad' | 'none';
+}
+
+export interface SimilarListing {
+  price: number;
+  mileage: number;
+  title: string;
+  is_current: boolean;
+}
+
+export interface MarketComparison {
+  listing: {
+    price: number;
+    make: string;
+    model: string;
+    year: number;
+    mileage: number;
+    deal_score_numeric: number;
+  };
+  market: MarketStats;
+  similar_listings: SimilarListing[];
 }
