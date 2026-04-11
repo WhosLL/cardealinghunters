@@ -63,10 +63,10 @@ const KNOWN_MAKES: Record<string, string> = {
 // Common models per make for better extraction
 const COMMON_MODELS: Record<string, string[]> = {
   'Toyota': ['Camry', 'Corolla', 'RAV4', 'Tacoma', 'Tundra', 'Highlander', 'Prius', '4Runner', 'Sienna', 'Avalon', 'Yaris', 'Supra', 'Land Cruiser', 'GR86'],
-  'Honda': ['Civic', 'Accord', 'CR-V', 'Pilot', 'Odyssey', 'Fit', 'HR-V', 'Ridgeline', 'Element', 'S2000', 'Prelude', 'Insight', 'Passport'],
-  'Ford': ['F-150', 'F150', 'Mustang', 'Explorer', 'Escape', 'Focus', 'Fusion', 'Ranger', 'Bronco', 'Edge', 'Expedition', 'Taurus', 'F-250', 'F250', 'F-350', 'Maverick'],
-  'Chevrolet': ['Silverado', 'Camaro', 'Corvette', 'Malibu', 'Equinox', 'Tahoe', 'Suburban', 'Traverse', 'Impala', 'Cruze', 'Colorado', 'Blazer', 'Trax', 'Spark'],
-  'BMW': ['3 Series', '5 Series', '7 Series', 'X3', 'X5', 'X1', 'X7', 'M3', 'M5', '328i', '335i', '528i', '535i', 'Z4', 'M4'],
+  'Honda': ['Civic', 'Accord', 'CR-V', 'CRV', 'Pilot', 'Odyssey', 'Fit', 'HR-V', 'HRV', 'Ridgeline', 'Element', 'S2000', 'Prelude', 'Insight', 'Passport', 'Prologue'],
+  'Ford': ['F-150', 'F150', 'F 150', 'Mustang', 'Explorer', 'Escape', 'Focus', 'Fusion', 'Ranger', 'Bronco', 'Edge', 'Expedition', 'Taurus', 'F-250', 'F250', 'F 250', 'F-350', 'F350', 'F 350', 'F-450', 'F450', 'F 450', 'F-550', 'F550', 'F 550', 'Transit', 'Flex', 'Fiesta', 'Maverick', 'EcoSport', 'Super Duty'],
+  'Chevrolet': ['Silverado', 'Camaro', 'Corvette', 'Malibu', 'Equinox', 'Tahoe', 'Suburban', 'Traverse', 'Impala', 'Cruze', 'Colorado', 'Blazer', 'Trax', 'Spark', 'Express', '2500', '3500', '1500', 'Bolt', 'Sonic', 'Trailblazer', 'Avalanche', 'S10', 'S-10'],
+  'BMW': ['3 Series', '4 Series', '5 Series', '7 Series', 'X3', 'X5', 'X1', 'X7', 'X4', 'X6', 'M3', 'M5', 'M4', '328i', '335i', '435i', '528i', '535i', '540i', '740i', 'Z4', 'i4', 'iX'],
   'Nissan': ['Altima', 'Sentra', 'Maxima', 'Rogue', 'Pathfinder', 'Frontier', 'Titan', 'Murano', 'Versa', '370Z', '350Z', 'Leaf', 'Kicks', 'Armada'],
   'Jeep': ['Wrangler', 'Cherokee', 'Grand Cherokee', 'Compass', 'Renegade', 'Gladiator', 'Liberty', 'Patriot'],
   'Dodge': ['Charger', 'Challenger', 'Durango', 'Journey', 'Grand Caravan', 'Dart', 'Viper', 'Neon'],
@@ -74,16 +74,22 @@ const COMMON_MODELS: Record<string, string[]> = {
   'Kia': ['Forte', 'Optima', 'Sorento', 'Sportage', 'Soul', 'Telluride', 'Seltos', 'Rio', 'Stinger', 'K5'],
   'Subaru': ['Outback', 'Forester', 'Crosstrek', 'Impreza', 'WRX', 'Legacy', 'Ascent', 'BRZ'],
   'Tesla': ['Model 3', 'Model S', 'Model X', 'Model Y', 'Cybertruck'],
-  'Mercedes-Benz': ['C-Class', 'E-Class', 'S-Class', 'GLC', 'GLE', 'A-Class', 'CLA', 'C300', 'E350', 'S550', 'AMG', 'G-Wagon', 'GLA'],
+  'Mercedes-Benz': ['C-Class', 'E-Class', 'S-Class', 'GLC', 'GLE', 'GLS', 'A-Class', 'CLA', 'C300', 'C350', 'E320', 'E350', 'E 320', 'E 350', 'S550', 'S 550', 'AMG', 'G-Wagon', 'GLA', 'GLB', 'Sprinter'],
   'Volkswagen': ['Jetta', 'Passat', 'Golf', 'Tiguan', 'Atlas', 'Beetle', 'GTI', 'ID.4'],
   'Lexus': ['RX', 'ES', 'IS', 'NX', 'GX', 'LS', 'LC', 'UX', 'RX350', 'ES350', 'IS350'],
   'Mazda': ['Mazda3', 'Mazda6', 'CX-5', 'CX-9', 'CX-30', 'MX-5', 'Miata', 'CX-3', 'CX-50'],
   'GMC': ['Sierra', 'Terrain', 'Acadia', 'Yukon', 'Canyon', 'Envoy'],
-  'RAM': ['1500', '2500', '3500', 'ProMaster'],
+  'RAM': ['1500', '2500', '3500', '4500', '5500', 'ProMaster', 'ProMaster City'],
   'Cadillac': ['Escalade', 'CT5', 'CT4', 'XT5', 'XT4', 'XT6', 'CTS', 'ATS', 'SRX'],
   'Volvo': ['XC90', 'XC60', 'XC40', 'S60', 'S90', 'V60', 'V90'],
   'Acura': ['TLX', 'MDX', 'RDX', 'ILX', 'TSX', 'TL', 'RSX', 'Integra'],
   'Porsche': ['911', 'Cayenne', 'Macan', 'Panamera', 'Boxster', 'Cayman', 'Taycan'],
+  'Infiniti': ['Q50', 'Q60', 'Q70', 'QX50', 'QX60', 'QX80', 'G35', 'G37', 'FX35', 'FX50', 'EX35', 'M37', 'JX35'],
+  'Lincoln': ['MKZ', 'MKC', 'MKX', 'MKS', 'Navigator', 'Continental', 'Town Car', 'Aviator', 'Corsair'],
+  'Chrysler': ['300', 'Pacifica', 'Voyager', 'Town and Country', 'Town & Country', 'PT Cruiser', 'Sebring', 'Aspen'],
+  'Buick': ['Enclave', 'Encore', 'Envision', 'Regal', 'LaCrosse', 'Verano'],
+  'Audi': ['A4', 'A6', 'A3', 'A5', 'Q5', 'Q7', 'Q3', 'Q8', 'A8', 'S4', 'S5', 'TT', 'e-tron'],
+  'Land Rover': ['Range Rover', 'Discovery', 'Defender', 'Evoque', 'Freelander', 'LR4', 'LR2'],
 };
 
 // --- Extraction helpers ---
@@ -116,9 +122,20 @@ function extractModel(title: string, make: string): string {
   const models = COMMON_MODELS[make];
   if (models) {
     const titleLower = title.toLowerCase();
+    // Sort by length descending so "Grand Cherokee" matches before "Cherokee"
     const sorted = [...models].sort((a, b) => b.length - a.length);
     for (const model of sorted) {
-      if (titleLower.includes(model.toLowerCase())) return model;
+      if (titleLower.includes(model.toLowerCase())) {
+        // Normalize F-series variants: "F 350" / "F350" → "F-350"
+        const fMatch = model.match(/^F[\s-]?(\d{3})$/i);
+        if (fMatch && make === 'Ford') return 'F-' + fMatch[1];
+        // Normalize Mazda numeric models
+        if (make === 'Mazda' && /^\d$/.test(model)) return 'Mazda' + model;
+        // Normalize Honda CR-V / CRV
+        if (model.toUpperCase() === 'CRV') return 'CR-V';
+        if (model.toUpperCase() === 'HRV') return 'HR-V';
+        return model;
+      }
     }
   }
   const makeVariants = Object.entries(KNOWN_MAKES)

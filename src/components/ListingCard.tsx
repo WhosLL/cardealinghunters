@@ -9,6 +9,7 @@ interface ListingCardProps {
   onLike: (id: string) => void;
   onSkip: (id: string) => void;
   onContact?: (id: string) => void;
+  onUnsave?: (id: string) => void;
 }
 
 function getProxiedImageUrl(url: string): string {
@@ -39,7 +40,7 @@ function getDealExplanation(price: number, marketValue: number): { text: string;
   return { text: '~' + diffFormatted + ' above market avg of ' + mvFormatted, color: 'text-red-400' };
 }
 
-export function ListingCard({ listing, onLike, onSkip, onContact }: ListingCardProps) {
+export function ListingCard({ listing, onLike, onSkip, onContact, onUnsave }: ListingCardProps) {
   const [hovered, setHovered] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [showChart, setShowChart] = useState(false);
@@ -162,15 +163,23 @@ export function ListingCard({ listing, onLike, onSkip, onContact }: ListingCardP
 
           {/* Action buttons */}
           <div className="flex items-center gap-2 pt-2">
-            <button onClick={() => onLike(listing.id)} disabled={listing.isLiked}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg font-medium transition-all duration-200 ${
-                listing.isLiked
-                  ? 'bg-red-500/20 border border-red-500/50 text-red-400 cursor-default'
-                  : 'bg-slate-700/50 border border-slate-600/50 text-gray-300 hover:bg-red-500/30 hover:border-red-500/50 hover:text-red-400'
-              }`}>
-              <Heart className={`w-4 h-4 ${listing.isLiked ? 'fill-red-400' : ''}`} />
-              <span className="text-sm">{listing.isLiked ? 'Saved' : 'Save'}</span>
-            </button>
+            {listing.isLiked && onUnsave ? (
+              <button onClick={() => onUnsave(listing.id)}
+                className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg font-medium transition-all duration-200 bg-red-500/20 border border-red-500/50 text-red-400 hover:bg-red-600/30 hover:text-red-300">
+                <Heart className="w-4 h-4 fill-red-400" />
+                <span className="text-sm">Remove</span>
+              </button>
+            ) : (
+              <button onClick={() => onLike(listing.id)} disabled={listing.isLiked}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg font-medium transition-all duration-200 ${
+                  listing.isLiked
+                    ? 'bg-red-500/20 border border-red-500/50 text-red-400 cursor-default'
+                    : 'bg-slate-700/50 border border-slate-600/50 text-gray-300 hover:bg-red-500/30 hover:border-red-500/50 hover:text-red-400'
+                }`}>
+                <Heart className={`w-4 h-4 ${listing.isLiked ? 'fill-red-400' : ''}`} />
+                <span className="text-sm">{listing.isLiked ? 'Saved' : 'Save'}</span>
+              </button>
+            )}
             <button onClick={() => onSkip(listing.id)} disabled={listing.isSkipped}
               className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg font-medium transition-all duration-200 ${
                 listing.isSkipped

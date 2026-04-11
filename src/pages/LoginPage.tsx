@@ -38,7 +38,7 @@ export function LoginPage() {
     setError('');
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: window.location.origin + '/browse',
+        redirectTo: window.location.origin + '/reset-password',
       });
       if (error) throw error;
       setResetSent(true);

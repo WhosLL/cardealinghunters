@@ -4,6 +4,7 @@ import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute';
 import { Navbar } from './components/Navbar';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { BrowsePage } from './pages/BrowsePage';
 import { SavedDealsPage } from './pages/SavedDealsPage';
 import { PreferencesPage } from './pages/PreferencesPage';
@@ -21,6 +22,7 @@ function AppLayout() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/browse" element={<ProtectedRoute><BrowsePage /></ProtectedRoute>} />
         <Route path="/saved" element={<ProtectedRoute><SavedDealsPage /></ProtectedRoute>} />
         <Route path="/preferences" element={<ProtectedRoute><PreferencesPage /></ProtectedRoute>} />

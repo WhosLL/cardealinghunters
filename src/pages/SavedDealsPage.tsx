@@ -39,6 +39,7 @@ export function SavedDealsPage() {
               listing={listing}
               onLike={() => {}}
               onSkip={() => {}}
+              onUnsave={handleUnlike}
             />
           ))}
         </div>
