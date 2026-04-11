@@ -50,7 +50,7 @@ export function ListingCard({ listing, onLike, onSkip, onContact }: ListingCardP
   const dealExplanation = getDealExplanation(listing.price, listing.market_value ?? 0);
 
   const priceFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(listing.price);
-  const mileageFormatted = new Intl.NumberFormat('en-US').format(listing.mileage);
+  const mileageFormatted = listing.mileage > 0 ? new Intl.NumberFormat('en-US').format(listing.mileage) + ' mi' : 'N/A';
   const isDealer = listing.description?.toLowerCase().includes('dealer') ? true : false;
   const sellerType = isDealer ? 'Dealer' : 'Private';
   const imageSrc = getProxiedImageUrl(listing.image_url);
@@ -136,12 +136,14 @@ export function ListingCard({ listing, onLike, onSkip, onContact }: ListingCardP
           <div className="flex items-center gap-4 text-sm text-gray-400">
             <div className="flex items-center gap-1.5">
               <Gauge className="w-4 h-4" />
-              <span>{mileageFormatted} mi</span>
+              <span>{mileageFormatted}</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <MapPin className="w-4 h-4" />
-              <span className="line-clamp-1">{listing.location}</span>
-            </div>
+            {listing.location && listing.location !== 'Unknown' && (
+              <div className="flex items-center gap-1.5">
+                <MapPin className="w-4 h-4" />
+                <span className="line-clamp-1">{listing.location}</span>
+              </div>
+            )}
           </div>
 
           <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">{listing.description}</p>

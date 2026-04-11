@@ -16,7 +16,7 @@ function AppLayout() {
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="bg-gray-900">
       {user && !isAuthPage && <Navbar />}
       <Routes>
         <Route path="/login" element={<LoginPage />} />
