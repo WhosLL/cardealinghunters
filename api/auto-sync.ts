@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_KEY || ''
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''h
 );
 
 const APIFY_TOKEN = process.env.APIFY_TOKEN || '';
@@ -20,8 +20,8 @@ function isAuthorized(req: any): boolean {
   // CRON_SECRET header
   const secret = process.env.CRON_SECRET || '';
   if (secret && req.headers['x-cron-secret'] === secret) return true;
-  // Bearer service key
-  if (req.headers['authorization'] === `Bearer ${process.env.SUPABASE_SERVICE_KEY}`) return true;
+  // Bearer service keyh
+  if (req.headers['authorization'] === `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`) return true;
   return false;
 }
 
