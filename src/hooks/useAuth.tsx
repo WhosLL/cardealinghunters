@@ -23,18 +23,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                                               id: session.user.id,
                                               email: session.user.email || '',
                                   });
-                                  // Defer profile fetch to avoid Supabase client lock contention
+                                  // Fetch profile before setting loading to false
                           const userId = session.user.id;
                                   if (profileFetchedRef.current !== userId) {
                                               profileFetchedRef.current = userId;
-                                              setTimeout(() => fetchProfile(userId), 0);
+                                              fetchProfile(userId).finally(() => setLoading(false));
+                                  } else {
+                                              setLoading(false);
                                   }
                         } else {
                                   setUser(null);
                                   setProfile(null);
                                   profileFetchedRef.current = null;
+                                  setLoading(false);
                         }
-                        setLoading(false);
                 });
 
                 // Safety timeout - if onAuthStateChange never fires, still unblock the app
