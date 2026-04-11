@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''h
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
 const APIFY_TOKEN = process.env.APIFY_TOKEN || '';
@@ -43,7 +43,7 @@ function parseCraigslistHTML(html: string, baseUrl: string): RawListing[] {
   const jsonLdMatch = html.match(/<script[^>]*id="ld_searchpage_results"[^>]*>([\s\S]*?)<\/script>/);
   if (jsonLdMatch) {
     try {
-      const jsonLd = JSON.parse(jsonLdMatch[1]);
+      const jsonLd = JSON.parse(jsonLdMatch[1])
       const items = jsonLd.itemListElement || [];
       for (const item of items) {
         const title = item.name || '';
