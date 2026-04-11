@@ -259,6 +259,22 @@ export async function scrapeCraigslist(searchUrl: string): Promise<any[]> {
   return data.listings || [];
 }
 
+// Fetch odometer/VIN from a Craigslist listing detail page via our API proxy
+async function fetchListingDetail(listingUrl: string): Promise<{ odometer: number; vin: string | null } | null> {
+  try {
+    const response = await fetch(`/api/fetch-listing-detail?url=${encodeURIComponent(listingUrl)}`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (data.status === 'deleted') return null;
+    return {
+      odometer: data.odometer || 0,
+      vin: data.vin || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function processRawListings(rawListings: any[]): Promise<number> {
   let insertedCount = 0;
 
@@ -270,14 +286,11 @@ export async function processRawListings(rawListings: any[]): Promise<number> {
       const make = extractMake(title);
       const model = extractModel(title, make);
       const fullText = `${title} ${item.description || ''}`;
-      const mileage = extractMileage(fullText);
+      let mileage = extractMileage(fullText);
       const seller = analyzeSellerLanguage(fullText);
 
       if (isJunkListing(title, price, year, make)) continue;
       if (!title || title.length < 5) continue;
-
-      const marketValue = calculateMarketValue(year, make, model);
-      const dealScore = calculateDealScore(price, marketValue);
 
       // Deduplicate by source_url
       if (item.url) {
@@ -288,6 +301,19 @@ export async function processRawListings(rawListings: any[]): Promise<number> {
           .limit(1);
         if (existing && existing.length > 0) continue;
       }
+
+      // If no mileage from search results, try fetching from the detail page
+      if (mileage === 0 && item.url) {
+        const detail = await fetchListingDetail(item.url);
+        if (detail) {
+          if (detail.odometer > 0) mileage = detail.odometer;
+        }
+        // Small delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      const marketValue = calculateMarketValue(year, make, model);
+      const dealScore = calculateDealScore(price, marketValue);
 
       const { error } = await supabase.from('listings').insert({
         title,
