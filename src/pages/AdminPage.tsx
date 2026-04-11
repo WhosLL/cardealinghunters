@@ -28,6 +28,8 @@ export function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [backfillStatus, setBackfillStatus] = useState('');
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
+  const [cleanupStatus, setCleanupStatus] = useState('');
 
   useEffect(() => {
     fetchScrapeHistory();
@@ -167,6 +169,24 @@ export function AdminPage() {
     }
   };
 
+  const handleCleanup = async () => {
+    setIsCleaningUp(true);
+    setCleanupStatus('Checking listings for expired posts...');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await fetch('/api/cleanup-expired', {
+        headers: { 'Authorization': 'Bearer ' + (session?.access_token || '') },
+      });
+      const result = await resp.json();
+      if (!resp.ok) throw new Error(result.error || 'Cleanup failed');
+      setCleanupStatus(result.message);
+    } catch (err: any) {
+      setCleanupStatus('Error: ' + (err?.message || 'Cleanup failed'));
+    } finally {
+      setIsCleaningUp(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="flex items-center gap-3 mb-8">
@@ -271,6 +291,37 @@ export function AdminPage() {
         {backfillStatus && (
           <div className="mt-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-emerald-300 text-sm">
             {backfillStatus}
+          </div>
+        )}
+      </div>
+
+
+      {/* Expired Listing Cleanup */}
+      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
+        <h2 className="text-xl font-semibold text-white mb-2">Expired Listing Cleanup</h2>
+        <p className="text-gray-400 text-sm mb-4">
+          Checks Craigslist listing URLs and deactivates expired/deleted posts. Also auto-expires anything older than 45 days.
+        </p>
+        <button
+          onClick={handleCleanup}
+          disabled={isCleaningUp}
+          className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors"
+        >
+          {isCleaningUp ? (
+            <>
+              <Loader className="w-5 h-5 animate-spin" />
+              Checking...
+            </>
+          ) : (
+            <>
+              <Play className="w-5 h-5" />
+              Run Cleanup
+            </>
+          )}
+        </button>
+        {cleanupStatus && (
+          <div className="mt-4 bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 text-orange-300 text-sm">
+            {cleanupStatus}
           </div>
         )}
       </div>
