@@ -11,8 +11,8 @@
   ],
   "crons": [
     {
-      "path": "/api/cleanup-expired",
-      "schedule": "0 6 * * *"
+      "path": "/api/auto-sync",
+      "schedule": "0 */1 * * *"
     }
   ]
 }

@@ -30,9 +30,15 @@ export function AdminPage() {
   const [backfillStatus, setBackfillStatus] = useState('');
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [cleanupStatus, setCleanupStatus] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState('');
+  const [scrapeSources, setScrapeSources] = useState<any[]>([]);
+  const [newSourceName, setNewSourceName] = useState('');
+  const [newSourceUrl, setNewSourceUrl] = useState('');
 
   useEffect(() => {
     fetchScrapeHistory();
+    fetchScrapeSources();
   }, []);
 
   useEffect(() => {
@@ -169,6 +175,54 @@ export function AdminPage() {
     }
   };
 
+  const fetchScrapeSources = async () => {
+    const { data } = await supabase.from('scrape_sources').select('*').order('name');
+    if (data) setScrapeSources(data);
+  };
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    setSyncStatus('Running auto-sync: scraping all sources + checking expired...');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await fetch('/api/auto-sync', {
+        headers: { 'Authorization': 'Bearer ' + (session?.access_token || '') },
+      });
+      const result = await resp.json();
+      if (!resp.ok) throw new Error(result.error || 'Sync failed');
+      setSyncStatus(result.message);
+      fetchScrapeHistory();
+      fetchScrapeSources();
+    } catch (err: any) {
+      setSyncStatus('Error: ' + (err?.message || 'Sync failed'));
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleAddSource = async () => {
+    if (!newSourceUrl) return;
+    const { error } = await supabase.from('scrape_sources').insert({
+      name: newSourceName || new URL(newSourceUrl).hostname.split('.')[0],
+      search_url: newSourceUrl,
+    });
+    if (!error) {
+      setNewSourceName('');
+      setNewSourceUrl('');
+      fetchScrapeSources();
+    }
+  };
+
+  const handleToggleSource = async (id: string, isActive: boolean) => {
+    await supabase.from('scrape_sources').update({ is_active: !isActive }).eq('id', id);
+    fetchScrapeSources();
+  };
+
+  const handleRemoveSource = async (id: string) => {
+    await supabase.from('scrape_sources').delete().eq('id', id);
+    fetchScrapeSources();
+  };
+
   const handleCleanup = async () => {
     setIsCleaningUp(true);
     setCleanupStatus('Checking listings for expired posts...');
@@ -295,6 +349,72 @@ export function AdminPage() {
         )}
       </div>
 
+
+
+      {/* Auto-Sync Pipeline */}
+      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
+        <h2 className="text-xl font-semibold text-white mb-2">Auto-Sync Pipeline</h2>
+        <p className="text-gray-400 text-sm mb-4">
+          Scrapes all active sources for new listings, removes expired posts, and refreshes market stats.
+          Runs automatically every hour via cron.
+        </p>
+        
+        <button
+          onClick={handleSync}
+          disabled={isSyncing}
+          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors mb-4"
+        >
+          {isSyncing ? (
+            <>
+              <Loader className="w-5 h-5 animate-spin" />
+              Syncing...
+            </>
+          ) : (
+            <>
+              <Play className="w-5 h-5" />
+              Run Sync Now
+            </>
+          )}
+        </button>
+        {syncStatus && (
+          <div className="mb-4 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-blue-300 text-sm">
+            {syncStatus}
+          </div>
+        )}
+
+        {/* Scrape Sources List */}
+        <div className="border-t border-gray-700 pt-4">
+          <h3 className="text-sm font-semibold text-gray-300 mb-3">Scrape Sources ({scrapeSources.filter(s => s.is_active).length} active)</h3>
+          <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+            {scrapeSources.map(s => (
+              <div key={s.id} className="flex items-center justify-between bg-gray-900/50 rounded-lg px-3 py-2">
+                <div className="flex-1 min-w-0">
+                  <span className={`text-sm font-medium ${s.is_active ? 'text-white' : 'text-gray-500'}`}>{s.name}</span>
+                  <p className="text-xs text-gray-500 truncate">{s.search_url}</p>
+                  {s.last_scraped_at && <p className="text-xs text-gray-600">Last: {new Date(s.last_scraped_at).toLocaleString()}</p>}
+                </div>
+                <div className="flex items-center gap-2 ml-2">
+                  <button onClick={() => handleToggleSource(s.id, s.is_active)}
+                    className={`text-xs px-2 py-1 rounded ${s.is_active ? 'bg-green-900/30 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
+                    {s.is_active ? 'ON' : 'OFF'}
+                  </button>
+                  <button onClick={() => handleRemoveSource(s.id)} className="text-xs text-red-400 hover:text-red-300">✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Add Source */}
+          <div className="flex gap-2">
+            <input value={newSourceName} onChange={e => setNewSourceName(e.target.value)}
+              placeholder="Name" className="w-28 bg-gray-700 text-white text-sm px-2 py-1.5 rounded border border-gray-600" />
+            <input value={newSourceUrl} onChange={e => setNewSourceUrl(e.target.value)}
+              placeholder="Craigslist search URL" className="flex-1 bg-gray-700 text-white text-sm px-2 py-1.5 rounded border border-gray-600" />
+            <button onClick={handleAddSource}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1.5 rounded font-medium">Add</button>
+          </div>
+        </div>
+      </div>
 
       {/* Expired Listing Cleanup */}
       <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
