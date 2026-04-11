@@ -324,10 +324,8 @@ export async function processRawListings(rawListings: any[]): Promise<number> {
         await new Promise(r => setTimeout(r, 300));
       }
 
-      const marketValue = calculateMarketValue(year, make, model);
-      const dealScore = calculateDealScore(price, marketValue);
-
-      const { error } = await supabase.from('listings').insert({
+      // Insert with placeholder values — real market value computed server-side
+      const { data: inserted, error } = await supabase.from('listings').insert({
         title,
         year,
         make,
@@ -339,12 +337,17 @@ export async function processRawListings(rawListings: any[]): Promise<number> {
         source_url: item.url || '',
         source: 'craigslist',
         description: buildEnrichedDescription(item.description || title, seller),
-        market_value: marketValue,
-        deal_score: dealScore,
+        market_value: 0,
+        deal_score: 'fair',
         is_active: true,
         posted_at: new Date().toISOString(),
-      });
-      if (!error) insertedCount++;
+      }).select('id').single();
+
+      if (!error && inserted) {
+        insertedCount++;
+        // Update market value using the DB function (uses real median prices)
+        try { await supabase.rpc('update_listing_market_value', { lid: inserted.id }); } catch {}
+      }
     } catch (err) {
       console.error('Error processing item:', err);
     }
@@ -360,7 +363,6 @@ export async function processRawListings(rawListings: any[]): Promise<number> {
 // LEGACY: Apify functions (kept for AdminPage)
 // =============================================
 
-const APIFY_TOKEN = import.meta.env.VITE_APIFY_TOKEN;
 
 export const SCRAPERS = {
   craigslist: {
@@ -399,68 +401,9 @@ export const SCRAPERS = {
 
 export type ScraperSource = keyof typeof SCRAPERS;
 
-export async function triggerApifyScrape(searchUrl: string, source: ScraperSource = 'craigslist'): Promise<string> {
-  const scraper = SCRAPERS[source];
-  const input = scraper.buildInput(searchUrl);
-  const response = await fetch(`https://api.apify.com/v2/acts/${scraper.actorId}/runs?token=${APIFY_TOKEN}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Failed to trigger scrape: ${response.status} ${errText}`);
-  }
-  const data = await response.json();
-  await supabase.from('scrape_runs').insert({
-    apify_run_id: data.data.id, source, search_url: searchUrl,
-    status: 'running', listings_added: 0, started_at: new Date().toISOString(),
-  });
-  return data.data.id;
-}
 
-export async function getApifyRunStatus(runId: string): Promise<any> {
-  const response = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_TOKEN}`);
-  if (!response.ok) throw new Error(`Failed to get run status: ${response.statusText}`);
-  return response.json();
-}
 
-export async function getApifyDataset(datasetId: string): Promise<any[]> {
-  const response = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_TOKEN}`);
-  if (!response.ok) throw new Error(`Failed to get dataset: ${response.statusText}`);
-  return response.json();
-}
 
-export async function processAndInsertListings(
-  datasetId: string, runId: string, searchUrl: string, source: ScraperSource
-): Promise<number> {
-  const scraper = SCRAPERS[source];
-  const items = await getApifyDataset(datasetId);
-  let insertedCount = 0;
-  for (const item of items) {
-    try {
-      const normalized = scraper.normalizeItem(item);
-      if (isJunkListing(normalized.title, normalized.price, extractYear(normalized.title), extractMake(normalized.title))) continue;
-      if (normalized.title === 'Unknown Vehicle') continue;
-      const marketValue = calculateMarketValue(normalized.year, normalized.make, normalized.model);
-      const dealScore = calculateDealScore(normalized.price, marketValue);
-      if (normalized.source_url) {
-        const { data: existing } = await supabase.from('listings').select('id').eq('source_url', normalized.source_url).limit(1);
-        if (existing && existing.length > 0) continue;
-      }
-      const { error } = await supabase.from('listings').insert({
-        ...normalized, market_value: marketValue, deal_score: dealScore, is_active: true,
-      });
-      if (!error) insertedCount++;
-    } catch (err) {
-      console.error('Error processing item:', err);
-    }
-  }
-  await supabase.from('scrape_runs').update({
-    status: 'completed', listings_added: insertedCount, completed_at: new Date().toISOString(),
-  }).eq('apify_run_id', runId);
-  return insertedCount;
-}
 
 export function getScraperSources() {
   return [

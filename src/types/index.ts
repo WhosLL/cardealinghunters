@@ -50,6 +50,7 @@ export interface UserProfile {
   full_name: string;
   client_type: ClientType;
   market_location: string;
+  is_admin: boolean;
   created_at: string;
 }
 

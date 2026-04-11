@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useListings, ListingsFilters, SortOption } from '../hooks/useListings';
 import { Filters } from '../components/Filters';
 import { ListingCard } from '../components/ListingCard';
@@ -10,6 +10,21 @@ export function BrowsePage() {
   const [sortBy, setSortBy] = useState<SortOption>('newest');
 
   const { listings, loading, error, totalCount, handleLike, handleSkip, refetch, loadMore, hasMore, handleContact } = useListings(filters);
+
+  // Debounce search input
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchInput(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setFilters(prev => ({ ...prev, search: value || undefined }));
+    }, 400);
+  }, []);
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, []);
 
   const handleRefresh = async () => {
     await refetch();
@@ -41,10 +56,7 @@ export function BrowsePage() {
               <input
                 type="text"
                 value={searchInput}
-                onChange={e => {
-                  setSearchInput(e.target.value);
-                  setFilters(prev => ({ ...prev, search: e.target.value || undefined }));
-                }}
+                onChange={e => handleSearchChange(e.target.value)}
                 placeholder="Search by make, model, or keyword..."
                 className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
               />

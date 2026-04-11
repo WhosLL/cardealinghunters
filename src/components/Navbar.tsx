@@ -46,9 +46,11 @@ export function Navbar() {
               >
                 Preferences
               </Link>
-              <Link to="/admin" className={`text-sm font-medium ${isActive('/admin')}`}>
-                Admin
-              </Link>
+              {profile?.is_admin && (
+                <Link to="/admin" className={`text-sm font-medium ${isActive('/admin')}`}>
+                  Admin
+                </Link>
+              )}
             </div>
           )}
 
@@ -105,13 +107,15 @@ export function Navbar() {
             >
               Preferences
             </Link>
-            <Link
-              to="/admin"
-              className="block text-gray-300 hover:text-white font-medium"
-              onClick={() => setIsOpen(false)}
-            >
-              Admin
-            </Link>
+            {profile?.is_admin && (
+              <Link
+                to="/admin"
+                className="block text-gray-300 hover:text-white font-medium"
+                onClick={() => setIsOpen(false)}
+              >
+                Admin
+              </Link>
+            )}
             <div className="border-t border-gray-800 pt-4">
               <div className="flex items-center gap-3 mb-4">
                 <NotificationBell />

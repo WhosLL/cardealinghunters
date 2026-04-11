@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './hooks/useAuth';
-import { ProtectedRoute } from './components/ProtectedRoute';
+import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute';
 import { Navbar } from './components/Navbar';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
@@ -24,7 +24,7 @@ function AppLayout() {
         <Route path="/browse" element={<ProtectedRoute><BrowsePage /></ProtectedRoute>} />
         <Route path="/saved" element={<ProtectedRoute><SavedDealsPage /></ProtectedRoute>} />
         <Route path="/preferences" element={<ProtectedRoute><PreferencesPage /></ProtectedRoute>} />
-        <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
+        <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
         <Route path="/" element={<Navigate to="/browse" replace />} />
       </Routes>
     </div>

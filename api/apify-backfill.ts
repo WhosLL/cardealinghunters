@@ -242,21 +242,56 @@ export default async function handler(req: any, res: any) {
       const attrs = parseListingPage(html);
       const odometer = parseOdometer(attrs['odometer'] || attrs['odometer_ld'] || '');
 
-      if (odometer > 0) {
+      // Build update payload with all extracted data
+      const updateData: Record<string, any> = {};
+      if (odometer > 0) updateData.mileage = odometer;
+
+      // Extract VIN
+      const vin = attrs['vin'] || attrs['vin_ld'] || null;
+      if (vin && vin.length === 17) updateData.vin = vin.toUpperCase();
+
+      // Extract other attributes
+      if (attrs['condition']) updateData.condition = attrs['condition'];
+      if (attrs['transmission']) updateData.transmission = attrs['transmission'];
+
+      if (Object.keys(updateData).length > 0) {
         const { error: updateErr } = await supabase
           .from('listings')
-          .update({ mileage: odometer })
+          .update(updateData)
           .eq('id', listing.id);
 
         if (!updateErr) {
           updated++;
-          results.push({ id: listing.id, status: 'updated', odometer, title: listing.title });
+          results.push({ id: listing.id, status: 'updated', ...updateData, title: listing.title });
+
+          // If VIN found, try to decode it and enrich the listing
+          if (updateData.vin) {
+            try {
+              const vinResp = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${updateData.vin}?format=json`);
+              if (vinResp.ok) {
+                const vinData = await vinResp.json();
+                const r = vinData?.Results?.[0];
+                if (r && r.ErrorCode === '0') {
+                  const vinUpdate: Record<string, any> = {};
+                  if (r.Trim) vinUpdate.trim_level = r.Trim;
+                  if (r.EngineModel) vinUpdate.engine = r.EngineModel;
+                  if (r.DriveType) vinUpdate.drivetrain = r.DriveType;
+                  if (r.FuelTypePrimary) vinUpdate.fuel_type = r.FuelTypePrimary;
+                  if (r.TransmissionStyle) vinUpdate.transmission = r.TransmissionStyle;
+                  if (r.BodyClass) vinUpdate.body_type = r.BodyClass;
+                  if (Object.keys(vinUpdate).length > 0) {
+                    await supabase.from('listings').update(vinUpdate).eq('id', listing.id);
+                  }
+                }
+              }
+            } catch {}
+          }
         } else {
           results.push({ id: listing.id, status: 'update_error', error: updateErr.message });
         }
       } else {
         noOdometer++;
-        results.push({ id: listing.id, status: 'no_odometer', attrs_found: Object.keys(attrs) });
+        results.push({ id: listing.id, status: 'no_data_found', attrs_found: Object.keys(attrs) });
       }
     } catch (err: any) {
       failed++;
