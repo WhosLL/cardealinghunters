@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_KEY || ''
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
 const APIFY_TOKEN = process.env.APIFY_TOKEN || '';
@@ -95,7 +95,7 @@ export default async function handler(req: any, res: any) {
   const isVercelCron = req.headers["x-vercel-cron"] === "true" && expectedSecret === "";
   
   // Allow if: cron secret matches, or bearer token is service key
-  if (!isVercelCron && cronSecret !== expectedSecret && authHeader !== `Bearer ${process.env.SUPABASE_SERVICE_KEY}`) {
+  if (!isVercelCron && cronSecret !== expectedSecret && authHeader !== `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`) {
     // Check if request is from admin user
     const token = authHeader.replace('Bearer ', '');
     if (token) {
