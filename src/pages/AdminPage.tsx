@@ -26,6 +26,8 @@ export function AdminPage() {
   const [statusMessage, setStatusMessage] = useState('');
   const [scrapeHistory, setScrapeHistory] = useState<ScrapeJob[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isBackfilling, setIsBackfilling] = useState(false);
+  const [backfillStatus, setBackfillStatus] = useState('');
 
   useEffect(() => {
     fetchScrapeHistory();
@@ -105,6 +107,45 @@ export function AdminPage() {
       });
     } finally {
       setIsRunning(false);
+    }
+  };
+
+  const handleBackfill = async () => {
+    setIsBackfilling(true);
+    setBackfillStatus('Starting odometer backfill via Apify...');
+    setError(null);
+
+    try {
+      let totalUpdated = 0;
+      let totalProcessed = 0;
+      let remaining = 1;
+      let offset = 0;
+
+      while (remaining > 0 && offset < 200) {
+        setBackfillStatus(`Backfilling batch at offset ${offset}... (${totalUpdated} updated so far)`);
+        const resp = await fetch(`/api/apify-backfill?batch=10&offset=${offset}`);
+        const data = await resp.json();
+
+        if (!resp.ok) {
+          setError(data.error || 'Backfill failed');
+          if (data.setup) setBackfillStatus(data.setup);
+          break;
+        }
+
+        totalUpdated += data.updated || 0;
+        totalProcessed += data.processed || 0;
+        remaining = data.remaining || 0;
+        offset += 10;
+
+        if (data.processed === 0) break;
+      }
+
+      setBackfillStatus(`Done! Updated ${totalUpdated} listings with odometer data. ${remaining} still missing.`);
+    } catch (err: any) {
+      setError(err.message || 'Backfill failed');
+      setBackfillStatus('');
+    } finally {
+      setIsBackfilling(false);
     }
   };
 
@@ -199,6 +240,37 @@ export function AdminPage() {
         {error && (
           <div className="mt-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
             {error}
+          </div>
+        )}
+      </div>
+
+      {/* Odometer Backfill */}
+      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
+        <h2 className="text-xl font-semibold text-white mb-2">Odometer Backfill</h2>
+        <p className="text-gray-400 text-sm mb-4">
+          Fetches mileage data from individual Craigslist listing pages using Apify residential proxies.
+          This fills in odometer data that search results don't include.
+        </p>
+        <button
+          onClick={handleBackfill}
+          disabled={isBackfilling}
+          className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors"
+        >
+          {isBackfilling ? (
+            <>
+              <Loader className="w-5 h-5 animate-spin" />
+              Backfilling...
+            </>
+          ) : (
+            <>
+              <Play className="w-5 h-5" />
+              Run Odometer Backfill
+            </>
+          )}
+        </button>
+        {backfillStatus && (
+          <div className="mt-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-emerald-300 text-sm">
+            {backfillStatus}
           </div>
         )}
       </div>

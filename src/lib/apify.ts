@@ -259,11 +259,23 @@ export async function scrapeCraigslist(searchUrl: string): Promise<any[]> {
   return data.listings || [];
 }
 
-// Fetch odometer/VIN from a Craigslist listing detail page via our API proxy
-async function fetchListingDetail(listingUrl: string): Promise<{ odometer: number; vin: string | null } | null> {
+// Fetch odometer/VIN from a Craigslist listing detail page
+// Tries direct fetch first, falls back to Apify proxy for reliability
+async function fetchListingDetail(listingUrl: string, useApifyProxy = false): Promise<{ odometer: number; vin: string | null } | null> {
   try {
-    const response = await fetch(`/api/fetch-listing-detail?url=${encodeURIComponent(listingUrl)}`);
-    if (!response.ok) return null;
+    // Try direct fetch first (works for first ~10 requests)
+    const endpoint = useApifyProxy
+      ? `/api/apify-backfill?batch=1&url=${encodeURIComponent(listingUrl)}`
+      : `/api/fetch-listing-detail?url=${encodeURIComponent(listingUrl)}`;
+    
+    const response = await fetch(endpoint);
+    if (!response.ok) {
+      // If direct fetch was blocked, retry with Apify proxy
+      if (!useApifyProxy) {
+        return fetchListingDetail(listingUrl, true);
+      }
+      return null;
+    }
     const data = await response.json();
     if (data.status === 'deleted') return null;
     return {
